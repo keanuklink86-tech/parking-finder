@@ -1,0 +1,588 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Find parking (free version)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Overpass:wght@400;600;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+  :root {
+    --sign: #1B5FC1;
+    --paint: #F5C518;
+    --ink: #14202E;
+    --ink-soft: #4A5868;
+    --paper: #EEF1F4;
+    --row: #FFFFFF;
+    --line: #D5DBE2;
+    --open: #17804B;
+    --closed: #B5402E;
+    --unknown: #6B7785;
+    --font: "Overpass", "Helvetica Neue", Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { font-family: var(--font); color: var(--ink); background: var(--paper); font-size: 16px; line-height: 1.4; }
+  button, select, input { font: inherit; }
+  [hidden] { display: none !important; }
+  :focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+  .sign :focus-visible { outline-color: #fff; }
+
+  .sign {
+    background: var(--sign);
+    color: #fff;
+    border-radius: 12px;
+    padding: 16px 18px 18px;
+    box-shadow: inset 0 0 0 3px var(--sign), inset 0 0 0 5px #fff;
+  }
+  .sign h1 { margin: 0 0 10px; font-size: 26px; font-weight: 800; letter-spacing: 0.01em; line-height: 1.1; }
+
+  #app { display: grid; grid-template-columns: 400px 1fr; height: 100vh; height: 100dvh; }
+  #panel { display: flex; flex-direction: column; min-height: 0; background: var(--paper); border-right: 1px solid var(--line); }
+  .panel-top { padding: 12px 12px 0; }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; font-size: 15px; }
+  .controls label { display: flex; align-items: center; gap: 8px; }
+  .controls select { padding: 6px 10px; border-radius: 6px; border: 0; background: #fff; color: var(--ink); }
+  .controls input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--paint); }
+  .searchrow { display: flex; gap: 8px; margin-top: 12px; }
+  .searchrow input { flex: 1; min-width: 0; padding: 9px 12px; border-radius: 8px; border: 0; color: var(--ink); background: #fff; }
+  .btn-paint { background: var(--paint); color: var(--ink); font-weight: 800; border: 0; border-radius: 8px; padding: 9px 14px; cursor: pointer; }
+  .centerline { border-top: 4px dashed var(--paint); margin: 14px 12px 0; }
+  #status { margin: 0; padding: 10px 16px; font-size: 15px; color: var(--ink-soft); min-height: 44px; }
+  .scroll { flex: 1; min-height: 0; overflow-y: auto; }
+  #list { list-style: none; margin: 0; padding: 0; }
+  .empty { padding: 20px 16px; color: var(--ink-soft); }
+
+  .lot {
+    display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center;
+    width: 100%; text-align: left; background: var(--row); color: inherit; cursor: pointer;
+    border: 0; border-bottom: 1px solid var(--line); border-left: 6px solid transparent; padding: 12px 16px 12px 12px;
+  }
+  .lot:hover { background: #F6F8FA; }
+  .lot[aria-current="true"] { border-left-color: var(--paint); background: #FFFBEA; }
+  .info { display: flex; flex-direction: column; min-width: 0; }
+  .name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .meta { color: var(--ink-soft); font-size: 14px; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .state { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .state.open { color: var(--open); }
+  .state.closed { color: var(--closed); }
+  .state.unknown { color: var(--unknown); }
+  .dist { font-weight: 800; font-size: 17px; white-space: nowrap; }
+
+  .psign {
+    width: 38px; height: 38px; border-radius: 8px; background: var(--sign); color: #fff;
+    font-weight: 800; font-size: 23px; line-height: 1; display: grid; place-items: center; position: relative; flex: none;
+    box-shadow: inset 0 0 0 2px var(--sign), inset 0 0 0 3.5px #fff;
+    transition: transform 0.12s ease;
+  }
+  .psign.closed { background: #8592A3; box-shadow: inset 0 0 0 2px #8592A3, inset 0 0 0 3.5px #fff; }
+  .pip { position: absolute; right: -5px; bottom: -5px; width: 15px; height: 15px; border-radius: 50%; border: 2px solid #fff; background: var(--unknown); }
+  .psign.open .pip { background: var(--open); }
+  .psign.closed .pip { background: var(--closed); }
+  .psign.selected { transform: scale(1.3); }
+  .pmarker { background: none; border: 0; }
+
+  .me { width: 18px; height: 18px; border-radius: 50%; background: #2F80ED; border: 3px solid #fff; box-shadow: 0 0 0 7px rgba(47,128,237,0.25); }
+  .dest { width: 22px; height: 22px; border-radius: 50%; background: var(--paint); border: 3px solid var(--ink); }
+
+  .route-head { padding: 14px 16px 6px; background: #fff; border-bottom: 1px solid var(--line); }
+  .route-head h2 { margin: 6px 0 2px; font-size: 22px; font-weight: 800; line-height: 1.15; }
+  .route-head .meta { white-space: normal; }
+  .route-head .state { white-space: normal; }
+  .summary { margin: 10px 0 12px; font-size: 18px; font-weight: 600; }
+  .summary.error { font-size: 15px; color: var(--closed); }
+  .actions { padding-bottom: 14px; }
+  .btn { display: inline-block; background: var(--sign); color: #fff; text-decoration: none; font-weight: 800; border-radius: 8px; padding: 12px 18px; }
+  .link { background: none; border: 0; padding: 4px 0; color: var(--sign); font-weight: 600; cursor: pointer; text-decoration: underline; }
+  .steps { margin: 0; padding: 12px 16px 24px 40px; }
+  .steps li { padding: 8px 0 8px 4px; border-bottom: 1px solid var(--line); }
+  .steps .d { display: block; color: var(--ink-soft); font-size: 14px; }
+
+  .foot { padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px)); font-size: 13px; color: var(--ink-soft); border-top: 1px solid var(--line); background: #fff; }
+  .foot p { margin: 0; }
+
+  .mapwrap { position: relative; min-height: 0; }
+  #map { width: 100%; height: 100%; background: #CFD8E3; font-family: var(--font); z-index: 0; }
+  .float { position: absolute; z-index: 1000; background: #fff; color: var(--ink); border: 0; border-radius: 999px; padding: 10px 18px; font-weight: 800; cursor: pointer; box-shadow: 0 2px 8px rgba(20,32,46,0.28); }
+  #searchArea { top: 12px; left: 50%; transform: translateX(-50%); background: var(--paint); }
+  #locateBtn { top: 12px; right: 12px; }
+
+  @media (max-width: 760px) {
+    #app { grid-template-columns: 1fr; grid-template-rows: 44% 56%; }
+    .mapwrap { order: 1; }
+    #panel { order: 2; border-right: 0; border-top: 1px solid var(--line); }
+    .sign h1 { font-size: 22px; }
+    #searchArea { font-size: 14px; padding: 8px 14px; }
+    #locateBtn { font-size: 14px; padding: 8px 14px; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <aside id="panel">
+    <div class="panel-top">
+      <div class="sign">
+        <h1>Parking nearby</h1>
+        <div class="controls">
+          <label>Search within
+            <select id="radius" aria-label="Search radius">
+              <option value="500">0.5 km</option>
+              <option value="1000" selected>1 km</option>
+              <option value="2000">2 km</option>
+              <option value="5000">5 km</option>
+            </select>
+          </label>
+          <label><input id="hideClosed" type="checkbox"> Hide closed lots</label>
+        </div>
+        <form id="addressForm" class="searchrow">
+          <input id="addressInput" type="search" placeholder="Or search near an address" aria-label="Search near an address" autocomplete="off">
+          <button class="btn-paint" type="submit">Go</button>
+        </form>
+      </div>
+    </div>
+    <div class="centerline" aria-hidden="true"></div>
+    <p id="status" role="status" aria-live="polite">Starting up…</p>
+
+    <div class="scroll">
+      <ol id="list"></ol>
+      <section id="route" hidden>
+        <div class="route-head">
+          <button id="backBtn" class="link" type="button">Back to results</button>
+          <h2 id="routeName"></h2>
+          <p id="routeMeta" class="meta"></p>
+          <p id="routeState" class="state"></p>
+          <p id="routeSummary" class="summary" role="status" aria-live="polite"></p>
+          <div class="actions"><a id="gmapsLink" class="btn" target="_blank" rel="noopener">Navigate in Google Maps</a></div>
+        </div>
+        <ol id="steps" class="steps"></ol>
+      </section>
+    </div>
+
+    <div class="foot">
+      <p>Map data from OpenStreetMap volunteers. Hours and fees are often missing or out of date, and nobody reports how many spaces are free.</p>
+    </div>
+  </aside>
+
+  <div class="mapwrap">
+    <div id="map"></div>
+    <button id="searchArea" class="float" type="button">Search this area</button>
+    <button id="locateBtn" class="float" type="button">Use my location</button>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+(() => {
+  "use strict";
+
+  const $ = (id) => document.getElementById(id);
+  const imperial = /^en-(US|LR|MM)/i.test(navigator.language || "");
+  const RANK = { open: 0, unknown: 1, closed: 2 };
+  const OVERPASS = ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter"];
+  const EXCLUDE_TYPES = new Set(["street_side", "lane", "on_kerb", "half_on_kerb", "shoulder", "garage_boxes", "carports"]);
+  const TYPE_LABEL = { surface: "Surface lot", "multi-storey": "Multi-storey", underground: "Underground", rooftop: "Rooftop" };
+
+  const state = {
+    map: null, user: null, userMarker: null, destMarker: null, layer: null,
+    lots: [], markers: new Map(), selected: null, routeLine: null,
+    radius: 1000, hideClosed: false, lastCenter: null, anchor: "you", token: 0
+  };
+
+  // Optional helper that reads OpenStreetMap "opening_hours" tags. The app still works if it fails to load.
+  const hoursLib = new Promise((resolve) => {
+    const s = document.createElement("script");
+    s.src = "https://cdn.jsdelivr.net/npm/opening_hours@3.8.0/build/opening_hours+deps.min.js";
+    s.onload = resolve;
+    s.onerror = resolve;
+    document.head.appendChild(s);
+  });
+
+  /* ---------- helpers ---------- */
+  function el(tag, cls, text) {
+    const n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text !== undefined) n.textContent = text;
+    return n;
+  }
+  function haversine(a, b) {
+    const R = 6371000, rad = Math.PI / 180;
+    const dLat = (b.lat - a.lat) * rad, dLng = (b.lng - a.lng) * rad;
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLng / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(h));
+  }
+  function fmtDist(m) {
+    if (imperial) {
+      const ft = m * 3.28084;
+      if (ft < 530) return `${Math.max(10, Math.round(ft / 10) * 10)} ft`;
+      return `${(m / 1609.344).toFixed(1)} mi`;
+    }
+    if (m < 1000) return `${Math.max(10, Math.round(m / 10) * 10)} m`;
+    return `${(m / 1000).toFixed(1)} km`;
+  }
+  function fmtTime(sec) {
+    const mins = Math.max(1, Math.round(sec / 60));
+    if (mins < 60) return `${mins} min`;
+    return `${Math.floor(mins / 60)} h ${mins % 60} min`;
+  }
+  function setStatus(msg) { $("status").textContent = msg; }
+
+  /* ---------- map ---------- */
+  function initMap() {
+    state.map = L.map("map", { zoomControl: false }).setView([20, 0], 2);
+    L.control.zoom({ position: "bottomright" }).addTo(state.map);
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }).addTo(state.map);
+    state.layer = L.layerGroup().addTo(state.map);
+
+    $("locateBtn").addEventListener("click", locate);
+    $("searchArea").addEventListener("click", () => {
+      const c = state.map.getCenter();
+      state.anchor = "the map centre";
+      searchLots({ lat: c.lat, lng: c.lng });
+    });
+    $("radius").addEventListener("change", (e) => {
+      state.radius = Number(e.target.value);
+      if (state.lastCenter) searchLots(state.lastCenter);
+    });
+    $("hideClosed").addEventListener("change", (e) => {
+      state.hideClosed = e.target.checked;
+      if (state.lots.length) { renderMarkers(); renderList(); updateStatus(); }
+    });
+    $("backBtn").addEventListener("click", backToList);
+    $("addressForm").addEventListener("submit", (e) => { e.preventDefault(); searchAddress($("addressInput").value.trim()); });
+
+    locate();
+  }
+
+  function locate() {
+    if (!navigator.geolocation) {
+      setStatus("Location isn't available in this browser. Search an address or pan the map and choose Search this area.");
+      return;
+    }
+    setStatus("Finding your location…");
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        state.user = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        placeUserDot();
+        clearDest();
+        state.anchor = "you";
+        state.map.setView(state.user, 15);
+        searchLots(state.user);
+      },
+      () => {
+        setStatus("Location is off. Allow location access for directions, or search an address above.");
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 }
+    );
+  }
+
+  function placeUserDot() {
+    if (state.userMarker) state.userMarker.remove();
+    state.userMarker = L.marker(state.user, {
+      icon: L.divIcon({ className: "pmarker", html: '<div class="me"></div>', iconSize: [18, 18], iconAnchor: [9, 9] }),
+      keyboard: false, interactive: false, zIndexOffset: -100
+    }).addTo(state.map);
+  }
+
+  function clearDest() {
+    if (state.destMarker) { state.destMarker.remove(); state.destMarker = null; }
+  }
+
+  async function searchAddress(q) {
+    if (!q) return;
+    setStatus("Looking up that address…");
+    try {
+      const res = await fetch("https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=" + encodeURIComponent(q));
+      const data = await res.json();
+      if (!data.length) { setStatus("Couldn't find that address. Try adding the city or a nearby landmark."); return; }
+      const center = { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+      clearDest();
+      state.destMarker = L.marker(center, {
+        icon: L.divIcon({ className: "pmarker", html: '<div class="dest"></div>', iconSize: [22, 22], iconAnchor: [11, 11] }),
+        title: "Your destination", keyboard: false
+      }).addTo(state.map);
+      state.anchor = "that address";
+      state.map.setView(center, 16);
+      searchLots(center);
+    } catch (err) {
+      console.error(err);
+      setStatus("Address search isn't responding right now. Try again in a moment.");
+    }
+  }
+
+  /* ---------- scanning for parking ---------- */
+  async function overpass(center, radius) {
+    const q = `[out:json][timeout:25];nwr["amenity"="parking"](around:${radius},${center.lat},${center.lng});out center tags 100;`;
+    let lastErr;
+    for (const url of OVERPASS) {
+      try {
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: "data=" + encodeURIComponent(q)
+        });
+        if (!res.ok) throw new Error("Overpass " + res.status);
+        return (await res.json()).elements || [];
+      } catch (e) { lastErr = e; }
+    }
+    throw lastErr;
+  }
+
+  function hoursStatus(raw) {
+    if (!raw) return { status: "unknown", label: "Hours not listed" };
+    if (raw.trim() === "24/7") return { status: "open", label: "Open 24/7" };
+    if (typeof window.opening_hours === "function") {
+      try {
+        const oh = new window.opening_hours(raw);
+        return oh.getState() ? { status: "open", label: "Open now" } : { status: "closed", label: "Closed" };
+      } catch (e) { /* fall through to raw text */ }
+    }
+    return { status: "unknown", label: "Hours: " + raw };
+  }
+
+  function parseLot(e, center) {
+    const t = e.tags || {};
+    if (["private", "permit", "no"].includes(t.access)) return null;
+    if (EXCLUDE_TYPES.has(t.parking)) return null;
+    const lat = e.lat !== undefined ? e.lat : e.center && e.center.lat;
+    const lng = e.lon !== undefined ? e.lon : e.center && e.center.lon;
+    if (lat === undefined || lng === undefined) return null;
+    const pos = { lat, lng };
+
+    const isGarage = ["multi-storey", "underground", "rooftop"].includes(t.parking);
+    const name = t.name || t.operator || (isGarage ? "Parking garage" : "Parking lot");
+    const meta = [];
+    if (TYPE_LABEL[t.parking]) meta.push(TYPE_LABEL[t.parking]);
+    if (t.fee === "yes") meta.push("Paid"); else if (t.fee === "no") meta.push("Free");
+    if (t.access === "customers") meta.push("Customers only");
+    if (t.capacity && /^\d+$/.test(t.capacity)) meta.push(`${t.capacity} spaces`);
+    const h = hoursStatus(t.opening_hours);
+
+    return {
+      id: `${e.type}/${e.id}`,
+      name, meta: meta.join(", "), pos,
+      status: h.status, statusLabel: h.label, hours: t.opening_hours || "",
+      distance: haversine(center, pos)
+    };
+  }
+
+  async function searchLots(center) {
+    const token = ++state.token;
+    state.lastCenter = center;
+    clearRoute();
+    showList();
+    setStatus("Scanning for parking lots…");
+
+    try {
+      const [elements] = await Promise.all([overpass(center, state.radius), hoursLib]);
+      if (token !== state.token) return;
+
+      const lots = elements.map((e) => parseLot(e, center)).filter(Boolean);
+      lots.sort((a, b) => RANK[a.status] - RANK[b.status] || a.distance - b.distance);
+      state.lots = lots.slice(0, 40);
+      renderMarkers();
+      renderList();
+      updateStatus();
+      fitToLots(center);
+    } catch (err) {
+      console.error(err);
+      state.lots = [];
+      renderMarkers();
+      renderList();
+      setStatus("Couldn't load parking data right now. The free map server may be busy, so try again in a moment.");
+    }
+  }
+
+  function visibleLots() {
+    return state.lots.filter((l) => !(state.hideClosed && l.status === "closed"));
+  }
+
+  function updateStatus() {
+    const shown = visibleLots();
+    if (!shown.length) { setStatus(""); return; }
+    const open = shown.filter((l) => l.status === "open").length;
+    const km = `${state.radius / 1000} km`;
+    let msg = `${shown.length} ${shown.length === 1 ? "lot" : "lots"} found within ${km} of ${state.anchor}.`;
+    if (open) msg += ` ${open} open now.`;
+    setStatus(msg);
+  }
+
+  function fitToLots(center) {
+    const shown = visibleLots();
+    if (!shown.length) return;
+    const pts = [[center.lat, center.lng]];
+    if (state.user) pts.push([state.user.lat, state.user.lng]);
+    shown.slice(0, 8).forEach((l) => pts.push([l.pos.lat, l.pos.lng]));
+    state.map.fitBounds(L.latLngBounds(pts), { padding: [70, 70], maxZoom: 17 });
+  }
+
+  /* ---------- rendering ---------- */
+  function psignHTML(status) {
+    return `<div class="psign ${status}">P<span class="pip"></span></div>`;
+  }
+
+  function renderMarkers() {
+    state.layer.clearLayers();
+    state.markers.clear();
+    visibleLots().forEach((lot) => {
+      const marker = L.marker(lot.pos, {
+        icon: L.divIcon({ className: "pmarker", html: psignHTML(lot.status), iconSize: [38, 38], iconAnchor: [19, 19] }),
+        title: `${lot.name}: ${lot.statusLabel}`
+      });
+      marker.on("click", () => selectLot(lot));
+      marker.addTo(state.layer);
+      state.markers.set(lot.id, marker);
+    });
+  }
+
+  function renderList() {
+    const list = $("list");
+    list.replaceChildren();
+    const lots = visibleLots();
+    if (!lots.length) {
+      if (state.lastCenter) {
+        list.append(el("li", "empty", "No parking lots found here. Try a larger search radius, or pan the map and choose Search this area."));
+      }
+      return;
+    }
+    lots.forEach((lot) => {
+      const li = el("li");
+      const b = el("button", "lot");
+      b.type = "button";
+      const sign = el("span");
+      sign.innerHTML = psignHTML(lot.status);
+      sign.setAttribute("aria-hidden", "true");
+      const info = el("span", "info");
+      info.append(el("span", "name", lot.name));
+      if (lot.meta) info.append(el("span", "meta", lot.meta));
+      info.append(el("span", `state ${lot.status}`, lot.statusLabel));
+      b.append(sign, info, el("span", "dist", fmtDist(lot.distance)));
+      b.addEventListener("click", () => selectLot(lot));
+      li.append(b);
+      list.append(li);
+    });
+  }
+
+  /* ---------- directions (OSRM public server) ---------- */
+  function mapsUrl(lot) {
+    const p = new URLSearchParams({ api: "1", destination: `${lot.pos.lat},${lot.pos.lng}`, travelmode: "driving" });
+    return "https://www.google.com/maps/dir/?" + p.toString();
+  }
+
+  async function fetchRoute(from, to) {
+    const url = `https://router.project-osrm.org/route/v1/driving/${from.lng},${from.lat};${to.lng},${to.lat}?overview=full&geometries=geojson&steps=true`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if (data.code !== "Ok" || !data.routes || !data.routes.length) throw new Error(data.message || "No driving route found");
+    return data.routes[0];
+  }
+
+  function stepText(s) {
+    const m = s.maneuver || {};
+    const mod = m.modifier || "";
+    const onto = s.name ? ` onto ${s.name}` : "";
+    const on = s.name ? ` on ${s.name}` : "";
+    if (mod === "uturn") return `Make a U-turn${on}`;
+    switch (m.type) {
+      case "depart": return s.name ? `Start on ${s.name}` : "Start driving";
+      case "turn":
+      case "end of road": return `Turn ${mod}${onto}`.replace("Turn  ", "Turn ");
+      case "new name": return `Continue${onto}`;
+      case "continue": return mod && mod !== "straight" ? `Continue ${mod}${onto}` : `Continue${on}`;
+      case "merge": return `Merge${mod ? " " + mod : ""}${onto}`;
+      case "on ramp": return `Take the ramp${onto}`;
+      case "off ramp": return `Take the exit${onto}`;
+      case "fork": return `Keep ${mod || "straight"}${onto}`;
+      case "roundabout":
+      case "rotary": return `At the roundabout, take exit ${m.exit || ""}${onto}`.replace("exit  ", "exit ");
+      case "roundabout turn": return `At the roundabout, turn ${mod}${onto}`;
+      default: return `Continue${onto}`;
+    }
+  }
+
+  function clearRoute() {
+    if (state.routeLine) { state.routeLine.remove(); state.routeLine = null; }
+    if (state.selected) {
+      const m = state.markers.get(state.selected.id);
+      if (m && m.getElement()) {
+        const p = m.getElement().querySelector(".psign");
+        if (p) p.classList.remove("selected");
+        m.setZIndexOffset(0);
+      }
+    }
+    state.selected = null;
+  }
+
+  function showList() { $("route").hidden = true; $("list").hidden = false; }
+
+  function backToList() {
+    clearRoute();
+    showList();
+    renderList();
+    if (state.lastCenter) fitToLots(state.lastCenter);
+  }
+
+  async function selectLot(lot) {
+    clearRoute();
+    state.selected = lot;
+    const marker = state.markers.get(lot.id);
+    if (marker && marker.getElement()) {
+      const p = marker.getElement().querySelector(".psign");
+      if (p) p.classList.add("selected");
+      marker.setZIndexOffset(1000);
+    }
+
+    $("list").hidden = true;
+    $("route").hidden = false;
+    $("routeName").textContent = lot.name;
+    $("routeMeta").textContent = lot.meta;
+    $("routeMeta").hidden = !lot.meta;
+    const st = $("routeState");
+    st.textContent = lot.statusLabel;
+    st.className = `state ${lot.status}`;
+    const summary = $("routeSummary");
+    summary.className = "summary";
+    summary.textContent = state.user ? "Getting directions…" : "Turn on location to see directions here.";
+    $("steps").replaceChildren();
+    $("gmapsLink").href = mapsUrl(lot);
+    $("backBtn").focus();
+    state.map.panTo(lot.pos);
+    if (!state.user) return;
+
+    try {
+      const route = await fetchRoute(state.user, lot.pos);
+      if (state.selected !== lot) return;
+
+      summary.textContent = `${fmtTime(route.duration)} drive, ${fmtDist(route.distance)}`;
+
+      const coords = route.geometry.coordinates.map(([lng, lat]) => [lat, lng]);
+      state.routeLine = L.polyline(coords, { color: "#1B5FC1", weight: 6, opacity: 0.9 }).addTo(state.map);
+      state.map.fitBounds(state.routeLine.getBounds(), { padding: [70, 70] });
+
+      const steps = $("steps");
+      ((route.legs && route.legs[0] && route.legs[0].steps) || []).forEach((s) => {
+        if (s.maneuver && s.maneuver.type === "arrive") return;
+        const li = el("li", null, stepText(s));
+        if (s.distance) li.append(el("span", "d", fmtDist(s.distance)));
+        steps.append(li);
+      });
+      steps.append(el("li", null, `Arrive at ${lot.name}`));
+    } catch (err) {
+      console.error(err);
+      if (state.selected !== lot) return;
+      summary.className = "summary error";
+      summary.textContent = "Couldn't load directions here. Use the button below to navigate in Google Maps.";
+    }
+  }
+
+  initMap();
+})();
+</script>
+</body>
+</html>
