@@ -65,10 +65,20 @@
   .info { display: flex; flex-direction: column; min-width: 0; }
   .name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .meta { color: var(--ink-soft); font-size: 14px; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .state { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .state.open { color: var(--open); }
-  .state.closed { color: var(--closed); }
-  .state.unknown { color: var(--unknown); }
+  .badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+  .state, .fee, .access {
+    display: inline-block; font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 999px;
+    white-space: nowrap; background: #E7EAEE; color: var(--ink-soft);
+  }
+  .state.open { background: #E3F4EB; color: var(--open); }
+  .state.closed { background: #FBE8E5; color: var(--closed); }
+  .state.unknown { background: #E7EAEE; color: var(--unknown); }
+  .fee.free { background: #E3F4EB; color: var(--open); }
+  .fee.paid { background: #FDF1D6; color: #8A6200; }
+  .fee.unknown { background: #E7EAEE; color: var(--unknown); }
+  .access.public { background: #E7EAEE; color: var(--ink-soft); }
+  .access.private { background: #FBE8E5; color: var(--closed); }
+  .access.permit, .access.customers { background: #FDF1D6; color: #8A6200; }
   .dist { font-weight: 800; font-size: 17px; white-space: nowrap; }
 
   .psign {
@@ -137,6 +147,8 @@
             </select>
           </label>
           <label><input id="hideClosed" type="checkbox"> Hide closed lots</label>
+          <label><input id="freeOnly" type="checkbox"> Free only</label>
+          <label><input id="publicOnly" type="checkbox"> Public only</label>
         </div>
         <form id="addressForm" class="searchrow">
           <input id="addressInput" type="search" placeholder="Or search near an address" aria-label="Search near an address" autocomplete="off">
@@ -154,7 +166,7 @@
           <button id="backBtn" class="link" type="button">Back to results</button>
           <h2 id="routeName"></h2>
           <p id="routeMeta" class="meta"></p>
-          <p id="routeState" class="state"></p>
+          <p id="routeState" class="badges"></p>
           <p id="routeSummary" class="summary" role="status" aria-live="polite"></p>
           <div class="actions"><a id="gmapsLink" class="btn" target="_blank" rel="noopener">Navigate in Google Maps</a></div>
         </div>
@@ -183,13 +195,19 @@
   const imperial = /^en-(US|LR|MM)/i.test(navigator.language || "");
   const RANK = { open: 0, unknown: 1, closed: 2 };
   const OVERPASS = ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter"];
-  const EXCLUDE_TYPES = new Set(["street_side", "lane", "on_kerb", "half_on_kerb", "shoulder", "garage_boxes", "carports"]);
-  const TYPE_LABEL = { surface: "Surface lot", "multi-storey": "Multi-storey", underground: "Underground", rooftop: "Rooftop" };
+  const EXCLUDE_TYPES = new Set(["garage_boxes", "carports"]);
+  const ON_STREET_TYPES = new Set(["street_side", "lane", "on_kerb", "half_on_kerb", "shoulder"]);
+  const TYPE_LABEL = {
+    surface: "Parking lot", "multi-storey": "Multi-storey garage", underground: "Underground garage", rooftop: "Rooftop lot",
+    street_side: "On-street parking", lane: "On-street parking", on_kerb: "On-street, on kerb", half_on_kerb: "On-street, half on kerb", shoulder: "Road shoulder parking"
+  };
+  const ORIENTATION_LABEL = { parallel: "Parallel parking", diagonal: "Angled parking", perpendicular: "Perpendicular parking" };
+  const ACCESS_LABEL = { public: "Public parking", private: "Private", permit: "Permit required", customers: "Customers only" };
 
   const state = {
     map: null, user: null, userMarker: null, destMarker: null, layer: null,
     lots: [], markers: new Map(), selected: null, routeLine: null,
-    radius: 1000, hideClosed: false, lastCenter: null, anchor: "you", token: 0
+    radius: 1000, hideClosed: false, freeOnly: false, publicOnly: false, lastCenter: null, anchor: "you", token: 0
   };
 
   // Optional helper that reads OpenStreetMap "opening_hours" tags. The app still works if it fails to load.
@@ -252,6 +270,14 @@
     });
     $("hideClosed").addEventListener("change", (e) => {
       state.hideClosed = e.target.checked;
+      if (state.lots.length) { renderMarkers(); renderList(); updateStatus(); }
+    });
+    $("freeOnly").addEventListener("change", (e) => {
+      state.freeOnly = e.target.checked;
+      if (state.lots.length) { renderMarkers(); renderList(); updateStatus(); }
+    });
+    $("publicOnly").addEventListener("change", (e) => {
+      state.publicOnly = e.target.checked;
       if (state.lots.length) { renderMarkers(); renderList(); updateStatus(); }
     });
     $("backBtn").addEventListener("click", backToList);
@@ -348,25 +374,33 @@
 
   function parseLot(e, center) {
     const t = e.tags || {};
-    if (["private", "permit", "no"].includes(t.access)) return null;
+    if (t.access === "no") return null;
     if (EXCLUDE_TYPES.has(t.parking)) return null;
     const lat = e.lat !== undefined ? e.lat : e.center && e.center.lat;
     const lng = e.lon !== undefined ? e.lon : e.center && e.center.lon;
     if (lat === undefined || lng === undefined) return null;
     const pos = { lat, lng };
 
+    const isOnStreet = ON_STREET_TYPES.has(t.parking);
     const isGarage = ["multi-storey", "underground", "rooftop"].includes(t.parking);
-    const name = t.name || t.operator || (isGarage ? "Parking garage" : "Parking lot");
+    const name = t.name || t.operator || TYPE_LABEL[t.parking] || (isGarage ? "Parking garage" : "Parking lot");
+
     const meta = [];
-    if (TYPE_LABEL[t.parking]) meta.push(TYPE_LABEL[t.parking]);
-    if (t.fee === "yes") meta.push("Paid"); else if (t.fee === "no") meta.push("Free");
-    if (t.access === "customers") meta.push("Customers only");
+    const orientation = ORIENTATION_LABEL[t.orientation] || "";
+    if (orientation) meta.push(orientation);
     if (t.capacity && /^\d+$/.test(t.capacity)) meta.push(`${t.capacity} spaces`);
+
+    const access = ["private", "permit", "customers"].includes(t.access) ? t.access : "public";
+    const fee = t.fee === "yes" ? "paid" : t.fee === "no" ? "free" : "unknown";
+    const feeLabel = fee === "paid" ? (t.charge ? `Paid (${t.charge})` : "Paid") : fee === "free" ? "Free" : "Price not listed";
     const h = hoursStatus(t.opening_hours);
 
     return {
       id: `${e.type}/${e.id}`,
       name, meta: meta.join(", "), pos,
+      kind: isOnStreet ? "onstreet" : "lot",
+      kindLabel: TYPE_LABEL[t.parking] || (isOnStreet ? "On-street parking" : "Parking lot"),
+      fee, feeLabel, access, accessLabel: ACCESS_LABEL[access],
       status: h.status, statusLabel: h.label, hours: t.opening_hours || "",
       distance: haversine(center, pos)
     };
@@ -400,7 +434,11 @@
   }
 
   function visibleLots() {
-    return state.lots.filter((l) => !(state.hideClosed && l.status === "closed"));
+    return state.lots.filter((l) =>
+      !(state.hideClosed && l.status === "closed") &&
+      !(state.freeOnly && l.fee !== "free") &&
+      !(state.publicOnly && l.access !== "public")
+    );
   }
 
   function updateStatus() {
@@ -460,8 +498,11 @@
       sign.setAttribute("aria-hidden", "true");
       const info = el("span", "info");
       info.append(el("span", "name", lot.name));
-      if (lot.meta) info.append(el("span", "meta", lot.meta));
-      info.append(el("span", `state ${lot.status}`, lot.statusLabel));
+      const typeLine = [lot.kindLabel, lot.meta].filter(Boolean).join(" · ");
+      if (typeLine) info.append(el("span", "meta", typeLine));
+      const badges = el("span", "badges");
+      badges.append(el("span", `state ${lot.status}`, lot.statusLabel), el("span", `fee ${lot.fee}`, lot.feeLabel), el("span", `access ${lot.access}`, lot.accessLabel));
+      info.append(badges);
       b.append(sign, info, el("span", "dist", fmtDist(lot.distance)));
       b.addEventListener("click", () => selectLot(lot));
       li.append(b);
@@ -541,11 +582,11 @@
     $("list").hidden = true;
     $("route").hidden = false;
     $("routeName").textContent = lot.name;
-    $("routeMeta").textContent = lot.meta;
-    $("routeMeta").hidden = !lot.meta;
+    const typeLine = [lot.kindLabel, lot.meta].filter(Boolean).join(" · ");
+    $("routeMeta").textContent = typeLine;
+    $("routeMeta").hidden = !typeLine;
     const st = $("routeState");
-    st.textContent = lot.statusLabel;
-    st.className = `state ${lot.status}`;
+    st.replaceChildren(el("span", `state ${lot.status}`, lot.statusLabel), el("span", `fee ${lot.fee}`, lot.feeLabel), el("span", `access ${lot.access}`, lot.accessLabel));
     const summary = $("routeSummary");
     summary.className = "summary";
     summary.textContent = state.user ? "Getting directions…" : "Turn on location to see directions here.";
