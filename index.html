@@ -343,19 +343,24 @@
   }
 
   /* ---------- scanning for parking ---------- */
-  async function overpass(center, radius) {
-    const q = `[out:json][timeout:25];nwr["amenity"="parking"](around:${radius},${center.lat},${center.lng});out center tags 100;`;
+  async function overpass(center, radius, onServerSwitch) {
+    const q = `[out:json][timeout:12];nwr["amenity"="parking"](around:${radius},${center.lat},${center.lng});out center tags 100;`;
     let lastErr;
-    for (const url of OVERPASS) {
+    for (let i = 0; i < OVERPASS.length; i++) {
+      const url = OVERPASS[i];
+      if (i > 0 && onServerSwitch) onServerSwitch();
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 9000);
       try {
         const res = await fetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: "data=" + encodeURIComponent(q)
+          body: "data=" + encodeURIComponent(q),
+          signal: controller.signal
         });
         if (!res.ok) throw new Error("Overpass " + res.status);
         return (await res.json()).elements || [];
-      } catch (e) { lastErr = e; }
+      } catch (e) { lastErr = e; } finally { clearTimeout(timer); }
     }
     throw lastErr;
   }
@@ -414,7 +419,10 @@
     setStatus("Scanning for parking lots…");
 
     try {
-      const [elements] = await Promise.all([overpass(center, state.radius), hoursLib]);
+      const [elements] = await Promise.all([
+        overpass(center, state.radius, () => setStatus("First map server is slow, trying a backup…")),
+        hoursLib
+      ]);
       if (token !== state.token) return;
 
       const lots = elements.map((e) => parseLot(e, center)).filter(Boolean);
