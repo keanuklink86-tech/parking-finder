@@ -39,6 +39,16 @@
   }
   .sign h1 { margin: 0 0 10px; font-size: 26px; font-weight: 800; letter-spacing: 0.01em; line-height: 1.1; }
 
+  .filters { margin-top: 12px; }
+  .filters summary {
+    list-style: none; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+    font-weight: 700; font-size: 14px; color: #fff; padding: 4px 0;
+  }
+  .filters summary::-webkit-details-marker { display: none; }
+  .filters summary::after { content: "▾"; font-size: 11px; transition: transform 0.15s ease; }
+  .filters[open] summary::after { transform: rotate(180deg); }
+  .filters .controls { margin-top: 8px; }
+
   #app { display: grid; grid-template-columns: 400px 1fr; height: 100vh; height: 100dvh; }
   #panel { display: flex; flex-direction: column; min-height: 0; background: var(--paper); border-right: 1px solid var(--line); }
   .panel-top { padding: 12px 12px 0; }
@@ -120,12 +130,25 @@
   #locateBtn { top: 12px; right: 12px; }
 
   @media (max-width: 760px) {
-    #app { grid-template-columns: 1fr; grid-template-rows: 44% 56%; }
+    #app { grid-template-columns: 1fr; grid-template-rows: 38% 62%; }
     .mapwrap { order: 1; }
     #panel { order: 2; border-right: 0; border-top: 1px solid var(--line); }
-    .sign h1 { font-size: 22px; }
-    #searchArea { font-size: 14px; padding: 8px 14px; }
-    #locateBtn { font-size: 14px; padding: 8px 14px; }
+    .panel-top { padding: 8px 8px 0; }
+    .sign { padding: 10px 12px 12px; border-radius: 10px; }
+    .sign h1 { font-size: 18px; margin-bottom: 2px; }
+    .searchrow { margin-top: 8px; }
+    .searchrow input { padding: 8px 10px; font-size: 15px; }
+    .searchrow .btn-paint { padding: 8px 12px; }
+    .filters { margin-top: 8px; }
+    .filters summary { font-size: 13px; }
+    .controls { font-size: 13px; gap: 8px 14px; }
+    .centerline { margin: 8px 8px 0; border-top-width: 3px; }
+    #status { padding: 6px 12px; font-size: 13px; min-height: auto; }
+    #searchArea { top: 8px; font-size: 13px; padding: 7px 12px; }
+    #locateBtn { top: 8px; font-size: 13px; padding: 7px 12px; }
+  }
+  @media (max-width: 760px) and (max-height: 700px) {
+    #app { grid-template-rows: 34% 66%; }
   }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
@@ -137,23 +160,26 @@
     <div class="panel-top">
       <div class="sign">
         <h1>Parking nearby</h1>
-        <div class="controls">
-          <label>Search within
-            <select id="radius" aria-label="Search radius">
-              <option value="500">0.5 km</option>
-              <option value="1000" selected>1 km</option>
-              <option value="2000">2 km</option>
-              <option value="5000">5 km</option>
-            </select>
-          </label>
-          <label><input id="hideClosed" type="checkbox"> Hide closed lots</label>
-          <label><input id="freeOnly" type="checkbox"> Free only</label>
-          <label><input id="publicOnly" type="checkbox"> Public only</label>
-        </div>
         <form id="addressForm" class="searchrow">
-          <input id="addressInput" type="search" placeholder="Or search near an address" aria-label="Search near an address" autocomplete="off">
+          <input id="addressInput" type="search" placeholder="Search near an address" aria-label="Search near an address" autocomplete="off">
           <button class="btn-paint" type="submit">Go</button>
         </form>
+        <details id="filtersDetails" class="filters">
+          <summary>Filters</summary>
+          <div class="controls">
+            <label>Search within
+              <select id="radius" aria-label="Search radius">
+                <option value="500">0.5 km</option>
+                <option value="1000" selected>1 km</option>
+                <option value="2000">2 km</option>
+                <option value="5000">5 km</option>
+              </select>
+            </label>
+            <label><input id="hideClosed" type="checkbox"> Hide closed lots</label>
+            <label><input id="freeOnly" type="checkbox"> Free only</label>
+            <label><input id="publicOnly" type="checkbox"> Public only</label>
+          </div>
+        </details>
       </div>
     </div>
     <div class="centerline" aria-hidden="true"></div>
@@ -192,6 +218,8 @@
   "use strict";
 
   const $ = (id) => document.getElementById(id);
+  const filtersDetails = document.getElementById("filtersDetails");
+  if (filtersDetails && window.matchMedia("(min-width: 761px)").matches) filtersDetails.open = true;
   const imperial = /^en-(US|LR|MM)/i.test(navigator.language || "");
   const RANK = { open: 0, unknown: 1, closed: 2 };
   const OVERPASS = ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter"];
