@@ -245,10 +245,7 @@
   if (filtersDetails && window.matchMedia("(min-width: 761px)").matches) filtersDetails.open = true;
   const imperial = /^en-(US|LR|MM)/i.test(navigator.language || "");
   const RANK = { open: 0, unknown: 1, closed: 2 };
-  const OVERPASS = [
-    "https://overpass-api.de/api/interpreter",
-    "https://overpass.private.coffee/api/interpreter"
-  ];
+  const OVERPASS = ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter"];
   const EXCLUDE_TYPES = new Set(["garage_boxes", "carports"]);
   const ON_STREET_TYPES = new Set(["street_side", "lane", "on_kerb", "half_on_kerb", "shoulder"]);
   const TYPE_LABEL = {
@@ -301,19 +298,6 @@
     return `${Math.floor(mins / 60)} h ${mins % 60} min`;
   }
   function setStatus(msg) { $("status").textContent = msg; }
-
-  /* ---------- basic usage counter (no signup, free, hosted by tally.yuki.sh) ----------
-     Change ANALYTICS_ID to something unlikely to clash with anyone else's, since this
-     is a shared public service — e.g. your name plus the app name. Check your counts
-     any time, without bumping them, at:
-     https://tally.yuki.sh/hits/ANALYTICS_ID/visits.json?mode=read
-     https://tally.yuki.sh/hits/ANALYTICS_ID/directions.json?mode=read */
-  const ANALYTICS_ID = "keanuklink-parking-finder";
-  function track(resource) {
-    try {
-      fetch(`https://tally.yuki.sh/hits/${ANALYTICS_ID}/${resource}.json`, { mode: "cors" }).catch(() => {});
-    } catch (e) { /* analytics should never break the app */ }
-  }
 
   /* ---------- last-results cache, in the browser only ---------- */
   const CACHE_KEY = "parking_finder_last_search";
@@ -456,13 +440,13 @@
 
   /* ---------- scanning for parking ---------- */
   async function overpass(center, radius, onServerSwitch) {
-    const q = `[out:json][timeout:20];nwr["amenity"="parking"](around:${radius},${center.lat},${center.lng});out center tags 100;`;
+    const q = `[out:json][timeout:12];nwr["amenity"="parking"](around:${radius},${center.lat},${center.lng});out center tags 100;`;
     let lastErr;
     for (let i = 0; i < OVERPASS.length; i++) {
       const url = OVERPASS[i];
-      if (i > 0 && onServerSwitch) onServerSwitch(i + 1, OVERPASS.length);
+      if (i > 0 && onServerSwitch) onServerSwitch();
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort("timed out"), 18000);
+      const timer = setTimeout(() => controller.abort(), 9000);
       try {
         const res = await fetch(url, {
           method: "POST",
@@ -547,7 +531,7 @@
 
     try {
       const [elements] = await Promise.all([
-        overpass(center, state.radius, (attempt, total) => setStatus(`Map server is slow, trying backup ${attempt - 1} of ${total - 1}…`)),
+        overpass(center, state.radius, () => setStatus("First map server is slow, trying a backup…")),
         hoursLib
       ]);
       if (token !== state.token) return;
@@ -730,7 +714,6 @@
   }
 
   async function selectLot(lot) {
-    track("directions");
     clearRoute();
     state.selected = lot;
     const marker = state.markers.get(lot.id);
@@ -784,7 +767,6 @@
     }
   }
 
-  track("visits");
   initMap();
 })();
 </script>
