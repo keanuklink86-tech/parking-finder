@@ -245,7 +245,11 @@
   if (filtersDetails && window.matchMedia("(min-width: 761px)").matches) filtersDetails.open = true;
   const imperial = /^en-(US|LR|MM)/i.test(navigator.language || "");
   const RANK = { open: 0, unknown: 1, closed: 2 };
-  const OVERPASS = ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter"];
+  const OVERPASS = [
+    "https://overpass-api.de/api/interpreter",
+    "https://overpass.kumi.systems/api/interpreter",
+    "https://overpass.openstreetmap.ru/api/interpreter"
+  ];
   const EXCLUDE_TYPES = new Set(["garage_boxes", "carports"]);
   const ON_STREET_TYPES = new Set(["street_side", "lane", "on_kerb", "half_on_kerb", "shoulder"]);
   const TYPE_LABEL = {
@@ -453,13 +457,13 @@
 
   /* ---------- scanning for parking ---------- */
   async function overpass(center, radius, onServerSwitch) {
-    const q = `[out:json][timeout:12];nwr["amenity"="parking"](around:${radius},${center.lat},${center.lng});out center tags 100;`;
+    const q = `[out:json][timeout:20];nwr["amenity"="parking"](around:${radius},${center.lat},${center.lng});out center tags 100;`;
     let lastErr;
     for (let i = 0; i < OVERPASS.length; i++) {
       const url = OVERPASS[i];
-      if (i > 0 && onServerSwitch) onServerSwitch();
+      if (i > 0 && onServerSwitch) onServerSwitch(i + 1, OVERPASS.length);
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 9000);
+      const timer = setTimeout(() => controller.abort("timed out"), 18000);
       try {
         const res = await fetch(url, {
           method: "POST",
@@ -544,7 +548,7 @@
 
     try {
       const [elements] = await Promise.all([
-        overpass(center, state.radius, () => setStatus("First map server is slow, trying a backup…")),
+        overpass(center, state.radius, (attempt, total) => setStatus(`Map server is slow, trying backup ${attempt - 1} of ${total - 1}…`)),
         hoursLib
       ]);
       if (token !== state.token) return;
