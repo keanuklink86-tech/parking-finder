@@ -61,6 +61,17 @@
   .btn-paint { background: var(--paint); color: var(--ink); font-weight: 800; border: 0; border-radius: 8px; padding: 9px 14px; cursor: pointer; }
   .centerline { border-top: 4px dashed var(--paint); margin: 14px 12px 0; }
   #status { margin: 0; padding: 10px 16px; font-size: 15px; color: var(--ink-soft); min-height: 44px; }
+  .updated-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 16px 8px; font-size: 13px; color: var(--ink-soft); }
+  .updated-row .link { font-size: 13px; padding: 0; }
+  .banner {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;
+    margin: 0 12px 10px; padding: 10px 12px; border-radius: 8px; font-size: 14px;
+    background: #FDF1D6; color: #8A6200;
+  }
+  .banner.error { background: #FBE8E5; color: var(--closed); }
+  .banner .link { font-size: 14px; font-weight: 800; color: inherit; }
+  .retry-empty { padding: 24px 16px; text-align: center; }
+  .retry-empty p { margin: 0 0 14px; color: var(--ink-soft); }
   .scroll { flex: 1; min-height: 0; overflow-y: auto; }
   #list { list-style: none; margin: 0; padding: 0; }
   .empty { padding: 20px 16px; color: var(--ink-soft); }
@@ -116,6 +127,7 @@
   .actions { padding-bottom: 14px; }
   .btn { display: inline-block; background: var(--sign); color: #fff; text-decoration: none; font-weight: 800; border-radius: 8px; padding: 12px 18px; }
   .link { background: none; border: 0; padding: 4px 0; color: var(--sign); font-weight: 600; cursor: pointer; text-decoration: underline; }
+  .osm-edit { display: block; margin-top: 10px; font-size: 14px; }
   .steps { margin: 0; padding: 12px 16px 24px 40px; }
   .steps li { padding: 8px 0 8px 4px; border-bottom: 1px solid var(--line); }
   .steps .d { display: block; color: var(--ink-soft); font-size: 14px; }
@@ -184,6 +196,14 @@
     </div>
     <div class="centerline" aria-hidden="true"></div>
     <p id="status" role="status" aria-live="polite">Starting up…</p>
+    <div id="updatedRow" class="updated-row" hidden>
+      <span id="updatedText"></span>
+      <button id="refreshBtn" class="link" type="button">Refresh</button>
+    </div>
+    <div id="banner" class="banner" hidden role="status" aria-live="polite">
+      <span id="bannerText"></span>
+      <button id="bannerRetry" class="link" type="button" hidden>Retry now</button>
+    </div>
 
     <div class="scroll">
       <ol id="list"></ol>
@@ -194,7 +214,10 @@
           <p id="routeMeta" class="meta"></p>
           <p id="routeState" class="badges"></p>
           <p id="routeSummary" class="summary" role="status" aria-live="polite"></p>
-          <div class="actions"><a id="gmapsLink" class="btn" target="_blank" rel="noopener">Navigate in Google Maps</a></div>
+          <div class="actions">
+            <a id="gmapsLink" class="btn" target="_blank" rel="noopener">Navigate in Google Maps</a>
+            <a id="osmEditLink" class="link osm-edit" target="_blank" rel="noopener">Report incorrect info</a>
+          </div>
         </div>
         <ol id="steps" class="steps"></ol>
       </section>
@@ -235,7 +258,7 @@
   const state = {
     map: null, user: null, userMarker: null, destMarker: null, layer: null,
     lots: [], markers: new Map(), selected: null, routeLine: null,
-    radius: 1000, hideClosed: false, freeOnly: false, publicOnly: false, lastCenter: null, anchor: "you", token: 0
+    radius: 1000, hideClosed: false, freeOnly: false, publicOnly: false, lastCenter: null, anchor: "you", token: 0, lastUpdated: null
   };
 
   // Optional helper that reads OpenStreetMap "opening_hours" tags. The app still works if it fails to load.
@@ -276,6 +299,62 @@
   }
   function setStatus(msg) { $("status").textContent = msg; }
 
+  /* ---------- basic usage counter (no signup, free, hosted by tally.yuki.sh) ----------
+     Change ANALYTICS_ID to something unlikely to clash with anyone else's, since this
+     is a shared public service — e.g. your name plus the app name. Check your counts
+     any time, without bumping them, at:
+     https://tally.yuki.sh/hits/ANALYTICS_ID/visits.json?mode=read
+     https://tally.yuki.sh/hits/ANALYTICS_ID/directions.json?mode=read */
+  const ANALYTICS_ID = "keanuklink-parking-finder";
+  function track(resource) {
+    try {
+      fetch(`https://tally.yuki.sh/hits/${ANALYTICS_ID}/${resource}.json`, { mode: "cors" }).catch(() => {});
+    } catch (e) { /* analytics should never break the app */ }
+  }
+
+  /* ---------- last-results cache, in the browser only ---------- */
+  const CACHE_KEY = "parking_finder_last_search";
+  function loadCache() {
+    try {
+      const raw = localStorage.getItem(CACHE_KEY);
+      if (!raw) return null;
+      const data = JSON.parse(raw);
+      if (!data || !Array.isArray(data.lots) || !data.lots.length) return null;
+      return data;
+    } catch (e) { return null; }
+  }
+  function saveCache(center, radius, lots) {
+    try {
+      localStorage.setItem(CACHE_KEY, JSON.stringify({ center, radius, lots, timestamp: Date.now() }));
+    } catch (e) { /* private browsing or storage full — fine to skip caching */ }
+  }
+  function timeAgo(ts) {
+    const mins = Math.round((Date.now() - ts) / 60000);
+    if (mins < 1) return "just now";
+    if (mins === 1) return "1 minute ago";
+    if (mins < 60) return `${mins} minutes ago`;
+    const hrs = Math.round(mins / 60);
+    if (hrs === 1) return "1 hour ago";
+    if (hrs < 24) return `${hrs} hours ago`;
+    return new Date(ts).toLocaleString();
+  }
+  function renderUpdated() {
+    const row = $("updatedRow");
+    if (!state.lastUpdated) { row.hidden = true; return; }
+    row.hidden = false;
+    $("updatedText").textContent = `Updated ${timeAgo(state.lastUpdated)}`;
+  }
+  setInterval(renderUpdated, 30000);
+
+  function showBanner(msg, kind, withRetry) {
+    const banner = $("banner");
+    banner.hidden = false;
+    banner.className = `banner${kind === "error" ? " error" : ""}`;
+    $("bannerText").textContent = msg;
+    $("bannerRetry").hidden = !withRetry;
+  }
+  function hideBanner() { $("banner").hidden = true; }
+
   /* ---------- map ---------- */
   function initMap() {
     state.map = L.map("map", { zoomControl: false }).setView([20, 0], 2);
@@ -309,6 +388,8 @@
       if (state.lots.length) { renderMarkers(); renderList(); updateStatus(); }
     });
     $("backBtn").addEventListener("click", backToList);
+    $("refreshBtn").addEventListener("click", () => { if (state.lastCenter) searchLots(state.lastCenter); });
+    $("bannerRetry").addEventListener("click", () => { if (state.lastCenter) searchLots(state.lastCenter); });
     $("addressForm").addEventListener("submit", (e) => { e.preventDefault(); searchAddress($("addressInput").value.trim()); });
 
     locate();
@@ -444,7 +525,22 @@
     state.lastCenter = center;
     clearRoute();
     showList();
-    setStatus("Scanning for parking lots…");
+    hideBanner();
+
+    const cache = loadCache();
+    const usedCache = !!cache;
+    if (cache) {
+      state.lots = cache.lots.map((l) => ({ ...l, distance: haversine(center, l.pos) }));
+      state.lots.sort((a, b) => RANK[a.status] - RANK[b.status] || a.distance - b.distance);
+      renderMarkers();
+      renderList();
+      updateStatus();
+      state.lastUpdated = cache.timestamp;
+      renderUpdated();
+      showBanner(`Showing saved results from ${timeAgo(cache.timestamp)} while checking for updates…`, "info", false);
+    } else {
+      setStatus("Scanning for parking lots…");
+    }
 
     try {
       const [elements] = await Promise.all([
@@ -456,16 +552,25 @@
       const lots = elements.map((e) => parseLot(e, center)).filter(Boolean);
       lots.sort((a, b) => RANK[a.status] - RANK[b.status] || a.distance - b.distance);
       state.lots = lots.slice(0, 40);
+      state.lastUpdated = Date.now();
+      saveCache(center, state.radius, state.lots);
       renderMarkers();
       renderList();
       updateStatus();
+      renderUpdated();
+      hideBanner();
       fitToLots(center);
     } catch (err) {
       console.error(err);
-      state.lots = [];
-      renderMarkers();
-      renderList();
-      setStatus("Couldn't load parking data right now. The free map server may be busy, so try again in a moment.");
+      if (token !== state.token) return;
+      if (usedCache) {
+        showBanner(`Couldn't refresh — still showing saved results from ${timeAgo(state.lastUpdated)}.`, "error", true);
+      } else {
+        state.lots = [];
+        renderMarkers();
+        renderList(true);
+        setStatus("");
+      }
     }
   }
 
@@ -515,12 +620,20 @@
     });
   }
 
-  function renderList() {
+  function renderList(showRetry) {
     const list = $("list");
     list.replaceChildren();
     const lots = visibleLots();
     if (!lots.length) {
-      if (state.lastCenter) {
+      if (showRetry) {
+        const box = el("li", "empty retry-empty");
+        box.append(el("p", null, "Couldn't load parking data right now. The free map server may be busy."));
+        const btn = el("button", "btn-paint", "Try again");
+        btn.type = "button";
+        btn.addEventListener("click", () => { if (state.lastCenter) searchLots(state.lastCenter); });
+        box.append(btn);
+        list.append(box);
+      } else if (state.lastCenter) {
         list.append(el("li", "empty", "No parking lots found here. Try a larger search radius, or pan the map and choose Search this area."));
       }
       return;
@@ -550,6 +663,14 @@
   function mapsUrl(lot) {
     const p = new URLSearchParams({ api: "1", destination: `${lot.pos.lat},${lot.pos.lng}`, travelmode: "driving" });
     return "https://www.google.com/maps/dir/?" + p.toString();
+  }
+
+  function osmEditUrl(lot) {
+    // lot.id looks like "node/123456" or "way/123456" — iD editor identifies
+    // features with a short type prefix: n for node, w for way, r for relation.
+    const [osmType, osmId] = lot.id.split("/");
+    const prefix = osmType === "way" ? "w" : osmType === "relation" ? "r" : "n";
+    return `https://www.openstreetmap.org/edit?editor=id#map=20/${lot.pos.lat}/${lot.pos.lng}&id=${prefix}${osmId}`;
   }
 
   async function fetchRoute(from, to) {
@@ -606,6 +727,7 @@
   }
 
   async function selectLot(lot) {
+    track("directions");
     clearRoute();
     state.selected = lot;
     const marker = state.markers.get(lot.id);
@@ -628,6 +750,7 @@
     summary.textContent = state.user ? "Getting directions…" : "Turn on location to see directions here.";
     $("steps").replaceChildren();
     $("gmapsLink").href = mapsUrl(lot);
+    $("osmEditLink").href = osmEditUrl(lot);
     $("backBtn").focus();
     state.map.panTo(lot.pos);
     if (!state.user) return;
@@ -658,6 +781,7 @@
     }
   }
 
+  track("visits");
   initMap();
 })();
 </script>
