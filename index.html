@@ -3,34 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<!-- CONFIG: keep in sync with config.js (brand.appName / brand.company, site.productionHost).
-     These tags are read by Google/WhatsApp without running JavaScript, so they stay in plain HTML. -->
-<title>Parking Finder | Klink Digital Group</title>
-<meta name="description" content="Find parking near you or near any address. See nearby parking lots on a map with opening hours, fees and turn-by-turn directions. Free, by Klink Digital Group.">
-<meta name="theme-color" content="#1B5FC1">
-<meta name="application-name" content="Parking Finder">
-<meta name="apple-mobile-web-app-title" content="Parking Finder">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
-<link rel="icon" href="favicon.svg" type="image/svg+xml">
-<link rel="icon" href="favicon-32.png" sizes="32x32" type="image/png">
-<link rel="apple-touch-icon" href="apple-touch-icon.png">
-<link rel="manifest" href="manifest.webmanifest">
-<link rel="canonical" href="https://klinkdigitalgroup.co.za/">
-<meta property="og:type" content="website">
-<meta property="og:site_name" content="Klink Digital Group">
-<meta property="og:title" content="Parking Finder by Klink Digital Group">
-<meta property="og:description" content="Find parking near you, with hours, fees and directions.">
-<meta property="og:url" content="https://klinkdigitalgroup.co.za/">
-<meta property="og:image" content="https://klinkdigitalgroup.co.za/og-image.png">
-<meta property="og:image:width" content="1200">
-<meta property="og:image:height" content="630">
-<meta name="twitter:card" content="summary_large_image">
+<title>Find parking (free version)</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Overpass:wght@400;600;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
   :root {
     --sign: #1B5FC1;
@@ -61,11 +38,6 @@
     box-shadow: inset 0 0 0 3px var(--sign), inset 0 0 0 5px #fff;
   }
   .sign h1 { margin: 0 0 10px; font-size: 26px; font-weight: 800; letter-spacing: 0.01em; line-height: 1.1; }
-  .brand { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
-  .brand h1 { margin: 0; }
-  .byline { font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; opacity: 0.85; white-space: nowrap; }
-  .foot .legal { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px 12px; }
-  .foot a { color: var(--sign); font-weight: 600; }
 
   .filters { margin-top: 12px; }
   .filters summary {
@@ -87,15 +59,7 @@
   .searchrow { display: flex; gap: 8px; margin-top: 12px; }
   .searchrow input { flex: 1; min-width: 0; padding: 9px 12px; border-radius: 8px; border: 0; color: var(--ink); background: #fff; }
   .btn-paint { background: var(--paint); color: var(--ink); font-weight: 800; border: 0; border-radius: 8px; padding: 9px 14px; cursor: pointer; }
-  /* Road-marking line under the sign. It's drawn as a repeating stripe (instead of a dashed
-     border) so it can slide along like road markings while the app is busy loading. */
-  .centerline {
-    --dash: 12px; --gap: 10px; --thick: 4px;
-    height: var(--thick); margin: 14px 12px 0;
-    background: repeating-linear-gradient(90deg, var(--paint) 0 var(--dash), transparent var(--dash) calc(var(--dash) + var(--gap)));
-  }
-  .centerline.loading { animation: road-move 0.55s linear infinite; }
-  @keyframes road-move { from { background-position: 0 0; } to { background-position: calc(var(--dash) + var(--gap)) 0; } }
+  .centerline { border-top: 4px dashed var(--paint); margin: 14px 12px 0; }
   #status { margin: 0; padding: 10px 16px; font-size: 15px; color: var(--ink-soft); min-height: 44px; }
   .updated-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 16px 8px; font-size: 13px; color: var(--ink-soft); }
   .updated-row .link { font-size: 13px; padding: 0; }
@@ -108,8 +72,6 @@
   .banner .link { font-size: 14px; font-weight: 800; color: inherit; }
   .retry-empty { padding: 24px 16px; text-align: center; }
   .retry-empty p { margin: 0 0 14px; color: var(--ink-soft); }
-  .retry-empty .status-link { display: block; margin: 14px auto 0; font-size: 14px; }
-  .retry-empty p.tech { font-size: 12px; word-break: break-word; margin-top: -4px; }
   .scroll { flex: 1; min-height: 0; overflow-y: auto; }
   #list { list-style: none; margin: 0; padding: 0; }
   .empty { padding: 20px 16px; color: var(--ink-soft); }
@@ -135,10 +97,9 @@
   .fee.free { background: #E3F4EB; color: var(--open); }
   .fee.paid { background: #FDF1D6; color: #8A6200; }
   .fee.unknown { background: #E7EAEE; color: var(--unknown); }
-  .access.public { background: #E3F4EB; color: var(--open); }
-  .access.unknown { background: #E7EAEE; color: var(--unknown); }
-  .access.private, .access.delivery { background: #FBE8E5; color: var(--closed); }
-  .access.permit, .access.customers, .access.destination { background: #FDF1D6; color: #8A6200; }
+  .access.public { background: #E7EAEE; color: var(--ink-soft); }
+  .access.private { background: #FBE8E5; color: var(--closed); }
+  .access.permit, .access.customers { background: #FDF1D6; color: #8A6200; }
   .dist { font-weight: 800; font-size: 17px; white-space: nowrap; }
 
   .psign {
@@ -160,7 +121,6 @@
   .route-head { padding: 14px 16px 6px; background: #fff; border-bottom: 1px solid var(--line); }
   .route-head h2 { margin: 6px 0 2px; font-size: 22px; font-weight: 800; line-height: 1.15; }
   .route-head .meta { white-space: normal; }
-  .name-note { margin: 0 0 4px; font-size: 13px; color: var(--ink-soft); font-style: italic; }
   .route-head .state { white-space: normal; }
   .summary { margin: 10px 0 12px; font-size: 18px; font-weight: 600; }
   .summary.error { font-size: 15px; color: var(--closed); }
@@ -168,10 +128,6 @@
   .btn { display: inline-block; background: var(--sign); color: #fff; text-decoration: none; font-weight: 800; border-radius: 8px; padding: 12px 18px; }
   .link { background: none; border: 0; padding: 4px 0; color: var(--sign); font-weight: 600; cursor: pointer; text-decoration: underline; }
   .osm-edit { display: block; margin-top: 10px; font-size: 14px; }
-  .nav-label { margin: 0 0 6px; font-size: 13px; font-weight: 700; color: var(--ink-soft); text-transform: uppercase; letter-spacing: 0.04em; }
-  .nav-btns { display: flex; flex-wrap: wrap; gap: 8px; }
-  .nav-btns .btn { padding: 11px 16px; }
-  .btn-alt { background: #fff; color: var(--sign); box-shadow: inset 0 0 0 2px var(--sign); }
   .steps { margin: 0; padding: 12px 16px 24px 40px; }
   .steps li { padding: 8px 0 8px 4px; border-bottom: 1px solid var(--line); }
   .steps .d { display: block; color: var(--ink-soft); font-size: 14px; }
@@ -192,17 +148,13 @@
     .panel-top { padding: 8px 8px 0; }
     .sign { padding: 10px 12px 12px; border-radius: 10px; }
     .sign h1 { font-size: 18px; margin-bottom: 2px; }
-    .brand { margin-bottom: 2px; }
-    .foot { padding: 6px 12px calc(6px + env(safe-area-inset-bottom, 0px)); font-size: 11px; line-height: 1.35; }
-    .foot .legal { margin-top: 3px; }
-    .byline { font-size: 10px; }
     .searchrow { margin-top: 8px; }
     .searchrow input { padding: 8px 10px; font-size: 15px; }
     .searchrow .btn-paint { padding: 8px 12px; }
     .filters { margin-top: 8px; }
     .filters summary { font-size: 13px; }
     .controls { font-size: 13px; gap: 8px 14px; }
-    .centerline { margin: 8px 8px 0; --thick: 3px; --dash: 10px; --gap: 8px; }
+    .centerline { margin: 8px 8px 0; border-top-width: 3px; }
     #status { padding: 6px 12px; font-size: 13px; min-height: auto; }
     #searchArea { top: 8px; font-size: 13px; padding: 7px 12px; }
     #locateBtn { top: 8px; font-size: 13px; padding: 7px 12px; }
@@ -210,12 +162,7 @@
   @media (max-width: 760px) and (max-height: 700px) {
     #app { grid-template-rows: 34% 66%; }
   }
-  @media (prefers-reduced-motion: reduce) {
-    * { transition: none !important; }
-    /* People who've asked their device for less motion get a gentle fade instead of sliding lines. */
-    .centerline.loading { animation: road-fade 1.2s ease-in-out infinite alternate; }
-    @keyframes road-fade { from { opacity: 1; } to { opacity: 0.35; } }
-  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
 <body>
@@ -224,10 +171,7 @@
   <aside id="panel">
     <div class="panel-top">
       <div class="sign">
-        <div class="brand">
-          <h1 id="heading">Parking nearby</h1>
-          <span id="byline" class="byline">by Klink Digital Group</span>
-        </div>
+        <h1>Parking nearby</h1>
         <form id="addressForm" class="searchrow">
           <input id="addressInput" type="search" placeholder="Search near an address" aria-label="Search near an address" autocomplete="off">
           <button class="btn-paint" type="submit">Go</button>
@@ -245,7 +189,7 @@
             </label>
             <label><input id="hideClosed" type="checkbox"> Hide closed lots</label>
             <label><input id="freeOnly" type="checkbox"> Free only</label>
-            <label title="Hides lots marked Private, Customers only, Visitors only, Permit required or Deliveries only. Lots with no access info stay."><input id="publicOnly" type="checkbox"> Hide restricted lots</label>
+            <label><input id="publicOnly" type="checkbox"> Public only</label>
           </div>
         </details>
       </div>
@@ -267,17 +211,11 @@
         <div class="route-head">
           <button id="backBtn" class="link" type="button">Back to results</button>
           <h2 id="routeName"></h2>
-          <p id="routeNameNote" class="name-note" hidden></p>
           <p id="routeMeta" class="meta"></p>
           <p id="routeState" class="badges"></p>
           <p id="routeSummary" class="summary" role="status" aria-live="polite"></p>
           <div class="actions">
-            <p class="nav-label">Navigate with</p>
-            <div class="nav-btns">
-              <a id="gmapsLink" class="btn" target="_blank" rel="noopener">Google Maps</a>
-              <a id="wazeLink" class="btn btn-alt" target="_blank" rel="noopener">Waze</a>
-              <a id="appleLink" class="btn btn-alt" target="_blank" rel="noopener">Apple Maps</a>
-            </div>
+            <a id="gmapsLink" class="btn" target="_blank" rel="noopener">Navigate in Google Maps</a>
             <a id="osmEditLink" class="link osm-edit" target="_blank" rel="noopener">Report incorrect info</a>
           </div>
         </div>
@@ -286,8 +224,7 @@
     </div>
 
     <div class="foot">
-      <p id="disclaimer">Map data from OpenStreetMap volunteers. Hours and fees are often missing or out of date, and nobody reports how many spaces are free.</p>
-      <p class="legal"><span>&copy; <span id="year">2026</span> <span id="company">Klink Digital Group</span></span><a href="privacy.html">Privacy notice</a><a href="status.html">Server status</a></p>
+      <p>Map data from OpenStreetMap volunteers. Hours and fees are often missing or out of date, and nobody reports how many spaces are free.</p>
     </div>
   </aside>
 
@@ -298,8 +235,7 @@
   </div>
 </div>
 
-<script src="config.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
 (() => {
   "use strict";
@@ -307,68 +243,9 @@
   const $ = (id) => document.getElementById(id);
   const filtersDetails = document.getElementById("filtersDetails");
   if (filtersDetails && window.matchMedia("(min-width: 761px)").matches) filtersDetails.open = true;
-  // Miles only for the countries that actually use them. The browser language alone isn't enough:
-  // many South African phones and PCs are set to "en-US", so we also check the device's time zone.
-  const TZ = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch (e) { return ""; } })();
-  const autoImperial = /^en-(US|LR|MM)/i.test(navigator.language || "") &&
-    /^(America\/|Pacific\/Honolulu|US\/|Africa\/Monrovia|Asia\/Yangon|Asia\/Rangoon)/.test(TZ);
-
-  /* ---------- client configuration (config.js), with safe defaults ---------- */
-  const CFG = window.APP_CONFIG || {};
-  const pick = (obj, key, fallback) => (obj && obj[key] !== undefined && obj[key] !== null && obj[key] !== "" ? obj[key] : fallback);
-  const BRAND = CFG.brand || {}, COLOURS = CFG.colours || {}, SEARCH = CFG.search || {}, SERVICES = CFG.services || {}, SITE = CFG.site || {};
-  const imperial = CFG.units === "imperial" ? true : CFG.units === "metric" ? false : autoImperial;
-  const SIGN_COLOUR = pick(COLOURS, "sign", "#1B5FC1");
-  const OVERPASS = Array.isArray(SERVICES.overpass) && SERVICES.overpass.length ? SERVICES.overpass : [
-    "https://overpass-api.de/api/interpreter",
-    "https://overpass.openstreetmap.fr/api/interpreter",
-    "https://overpass.private.coffee/api/interpreter",
-    "https://maps.mail.ru/osm/tools/overpass/api/interpreter"
-  ];
-  const OVERPASS_TIMEOUT = pick(SERVICES, "overpassTimeoutMs", 8000);
-  const GEOCODER = pick(SERVICES, "geocoder", "https://nominatim.openstreetmap.org/search");
-  // In-app turn-by-turn directions are OFF by default (v9): the free OSRM demo server only allows
-  // non-commercial use. Users get Google Maps / Waze / Apple Maps buttons instead (free, no API).
-  // Put a routing URL in config.js → services.router only if Klink gets its own or a paid router.
-  const ROUTER = pick(SERVICES, "router", "");
-  const TILES = pick(SERVICES, "tiles", "https://tile.openstreetmap.org/{z}/{x}/{y}.png");
-  const RADIUS_OPTIONS = Array.isArray(SEARCH.radiusOptions) && SEARCH.radiusOptions.length ? SEARCH.radiusOptions : [500, 1000, 2000, 5000];
-  const DEFAULT_RADIUS = RADIUS_OPTIONS.includes(SEARCH.defaultRadius) ? SEARCH.defaultRadius : (RADIUS_OPTIONS.includes(1000) ? 1000 : RADIUS_OPTIONS[0]);
-  const MAX_RESULTS = pick(SEARCH, "maxResults", 40);
-
-  function applyConfig() {
-    const root = document.documentElement.style;
-    const cssVar = { sign: "--sign", paint: "--paint", ink: "--ink", inkSoft: "--ink-soft", paper: "--paper", open: "--open", closed: "--closed" };
-    Object.keys(cssVar).forEach((k) => { if (COLOURS[k]) root.setProperty(cssVar[k], COLOURS[k]); });
-    const theme = document.querySelector('meta[name="theme-color"]');
-    if (theme && COLOURS.sign) theme.content = COLOURS.sign;
-
-    if (BRAND.heading) $("heading").textContent = BRAND.heading;
-    if (BRAND.byline !== undefined) { $("byline").textContent = BRAND.byline; $("byline").hidden = !BRAND.byline; }
-    if (BRAND.company) $("company").textContent = BRAND.company;
-    if (CFG.footer && CFG.footer.disclaimer) $("disclaimer").textContent = CFG.footer.disclaimer;
-
-    const sel = $("radius");
-    sel.replaceChildren(...RADIUS_OPTIONS.map((m) => {
-      const o = document.createElement("option");
-      o.value = String(m);
-      o.textContent = `${m / 1000} km`;
-      o.selected = m === DEFAULT_RADIUS;
-      return o;
-    }));
-    $("hideClosed").checked = !!SEARCH.hideClosedByDefault;
-    $("freeOnly").checked = !!SEARCH.freeOnlyByDefault;
-    $("publicOnly").checked = !!SEARCH.publicOnlyByDefault;
-
-    // Keep test copies (any address other than the main one) out of Google.
-    if (SITE.noindexOutsideProduction !== false && SITE.productionHost &&
-        location.hostname !== SITE.productionHost && location.hostname !== "www." + SITE.productionHost) {
-      const m = document.createElement("meta");
-      m.name = "robots"; m.content = "noindex, nofollow";
-      document.head.appendChild(m);
-    }
-  }
+  const imperial = /^en-(US|LR|MM)/i.test(navigator.language || "");
   const RANK = { open: 0, unknown: 1, closed: 2 };
+  const OVERPASS = ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter"];
   const EXCLUDE_TYPES = new Set(["garage_boxes", "carports"]);
   const ON_STREET_TYPES = new Set(["street_side", "lane", "on_kerb", "half_on_kerb", "shoulder"]);
   const TYPE_LABEL = {
@@ -376,25 +253,12 @@
     street_side: "On-street parking", lane: "On-street parking", on_kerb: "On-street, on kerb", half_on_kerb: "On-street, half on kerb", shoulder: "Road shoulder parking"
   };
   const ORIENTATION_LABEL = { parallel: "Parallel parking", diagonal: "Angled parking", perpendicular: "Perpendicular parking" };
-  // Who may park, from the map's "access" tag. Only lots actually marked public are called public;
-  // lots with nothing listed say so instead of being assumed public (v7).
-  const ACCESS_LABEL = {
-    public: "Public parking", unknown: "Access not listed",
-    customers: "Customers only", destination: "Visitors only", permit: "Permit required",
-    private: "Private", delivery: "Deliveries only"
-  };
-  const ACCESS_FROM_TAG = {
-    yes: "public", public: "public", permissive: "public", designated: "public",
-    customers: "customers", destination: "destination", permit: "permit", residents: "permit",
-    private: "private", employees: "private", staff: "private",
-    delivery: "delivery", deliveries: "delivery"
-  };
-  const RESTRICTED = new Set(["customers", "destination", "permit", "private", "delivery"]);
+  const ACCESS_LABEL = { public: "Public parking", private: "Private", permit: "Permit required", customers: "Customers only" };
 
   const state = {
     map: null, user: null, userMarker: null, destMarker: null, layer: null,
     lots: [], markers: new Map(), selected: null, routeLine: null,
-    radius: DEFAULT_RADIUS, hideClosed: !!SEARCH.hideClosedByDefault, freeOnly: !!SEARCH.freeOnlyByDefault, publicOnly: !!SEARCH.publicOnlyByDefault, lastCenter: null, anchor: "you", token: 0, lastUpdated: null
+    radius: 1000, hideClosed: false, freeOnly: false, publicOnly: false, lastCenter: null, anchor: "you", token: 0, lastUpdated: null
   };
 
   // Optional helper that reads OpenStreetMap "opening_hours" tags. The app still works if it fails to load.
@@ -433,62 +297,36 @@
     if (mins < 60) return `${mins} min`;
     return `${Math.floor(mins / 60)} h ${mins % 60} min`;
   }
-  /* Loading indicator: the yellow road line slides while anything is in progress.
-     "In progress" = a status message that ends in "…" (finding location, looking up an address,
-     scanning, trying a backup server) or a parking search still running in the background. */
-  let statusBusy = false, searchBusy = false;
-  function refreshLoading() {
-    const line = document.querySelector(".centerline");
-    if (line) line.classList.toggle("loading", statusBusy || searchBusy);
-  }
-  function setSearchBusy(v) { searchBusy = v; refreshLoading(); }
-  function setStatus(msg) {
-    $("status").textContent = msg;
-    statusBusy = /…\s*$/.test(msg || "");
-    refreshLoading();
-  }
+  function setStatus(msg) { $("status").textContent = msg; }
 
   /* ---------- basic usage counter (no signup, free, hosted by tally.yuki.sh) ----------
-     Settings (on/off and the counter ID) are in config.js → analytics. */
-  const ANALYTICS = CFG.analytics || {};
-  const ANALYTICS_ID = pick(ANALYTICS, "id", "keanuklink-parking-finder");
+     Change ANALYTICS_ID to something unlikely to clash with anyone else's, since this
+     is a shared public service — e.g. your name plus the app name. Check your counts
+     any time, without bumping them, at:
+     https://tally.yuki.sh/hits/ANALYTICS_ID/visits.json?mode=read
+     https://tally.yuki.sh/hits/ANALYTICS_ID/directions.json?mode=read */
+  const ANALYTICS_ID = "keanuklink-parking-finder";
   function track(resource) {
-    if (ANALYTICS.enabled === false) return;
     try {
       fetch(`https://tally.yuki.sh/hits/${ANALYTICS_ID}/${resource}.json`, { mode: "cors" }).catch(() => {});
     } catch (e) { /* analytics should never break the app */ }
   }
 
-  /* ---------- results cache, in the browser only ----------
-     v9: remembers up to 12 areas (not just the last one). Results younger than
-     search.freshForMinutes are shown straight away WITHOUT asking the map servers again,
-     so returning users mostly never touch the busy free servers. "Refresh" always re-checks. */
-  const CACHE_KEY = "parking_finder_areas_v9";
-  const CACHE_MAX_AGE = 7 * 24 * 60 * 60 * 1000; // older than a week: ignored
-  const CACHE_MAX_AREAS = 12;
-  const FRESH_MS = pick(SEARCH, "freshForMinutes", 360) * 60 * 1000;
-  function readCache() {
-    try { const d = JSON.parse(localStorage.getItem(CACHE_KEY) || "[]"); return Array.isArray(d) ? d : []; } catch (e) { return []; }
+  /* ---------- last-results cache, in the browser only ---------- */
+  const CACHE_KEY = "parking_finder_last_search";
+  function loadCache() {
+    try {
+      const raw = localStorage.getItem(CACHE_KEY);
+      if (!raw) return null;
+      const data = JSON.parse(raw);
+      if (!data || !Array.isArray(data.lots) || !data.lots.length) return null;
+      return data;
+    } catch (e) { return null; }
   }
-  function sameArea(entry, center, radius) {
-    return entry && entry.center && entry.radius === radius && haversine(entry.center, center) <= Math.min(250, radius / 4);
-  }
-  // Only reuse saved results for (roughly) the same place and radius.
-  function loadCache(center, radius) {
-    const now = Date.now();
-    const hit = readCache().find((e) => sameArea(e, center, radius) && Array.isArray(e.lots) && e.lots.length && now - e.timestamp <= CACHE_MAX_AGE);
-    return hit || null;
-  }
-  function saveCache(center, radius, lots, keepTimestamp) {
-    if (!center) return;
-    let entries = readCache().filter((e) => !sameArea(e, center, radius) && Date.now() - e.timestamp <= CACHE_MAX_AGE);
-    const old = keepTimestamp ? loadCache(center, radius) : null;
-    entries.unshift({ center, radius, lots, timestamp: old ? old.timestamp : Date.now() });
-    entries = entries.slice(0, CACHE_MAX_AREAS);
-    for (let i = 0; i < 4; i++) {
-      try { localStorage.setItem(CACHE_KEY, JSON.stringify(entries)); return; }
-      catch (e) { entries = entries.slice(0, Math.max(1, Math.floor(entries.length / 2))); } // storage full: keep fewer areas
-    }
+  function saveCache(center, radius, lots) {
+    try {
+      localStorage.setItem(CACHE_KEY, JSON.stringify({ center, radius, lots, timestamp: Date.now() }));
+    } catch (e) { /* private browsing or storage full — fine to skip caching */ }
   }
   function timeAgo(ts) {
     const mins = Math.round((Date.now() - ts) / 60000);
@@ -504,18 +342,9 @@
     const row = $("updatedRow");
     if (!state.lastUpdated) { row.hidden = true; return; }
     row.hidden = false;
-    const t = $("updatedText");
-    t.textContent = `Updated ${timeAgo(state.lastUpdated)}`;
-    // Slow search? Say how long it took and link to the Server status page.
-    if (state.lastDuration && state.lastDuration > SLOW_MS) {
-      t.append(` · took ${Math.round(state.lastDuration / 1000)} s · `);
-      const a = document.createElement("a");
-      a.href = "status.html"; a.textContent = "Why?"; a.className = "link";
-      t.append(a);
-    }
+    $("updatedText").textContent = `Updated ${timeAgo(state.lastUpdated)}`;
   }
   setInterval(renderUpdated, 30000);
-  const SLOW_MS = 5000;
 
   function showBanner(msg, kind, withRetry) {
     const banner = $("banner");
@@ -530,7 +359,7 @@
   function initMap() {
     state.map = L.map("map", { zoomControl: false }).setView([20, 0], 2);
     L.control.zoom({ position: "bottomright" }).addTo(state.map);
-    L.tileLayer(TILES, {
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
       maxZoom: 19,
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
     }).addTo(state.map);
@@ -559,8 +388,8 @@
       if (state.lots.length) { renderMarkers(); renderList(); updateStatus(); }
     });
     $("backBtn").addEventListener("click", backToList);
-    $("refreshBtn").addEventListener("click", () => { if (state.lastCenter) searchLots(state.lastCenter, true); });
-    $("bannerRetry").addEventListener("click", () => { if (state.lastCenter) searchLots(state.lastCenter, true); });
+    $("refreshBtn").addEventListener("click", () => { if (state.lastCenter) searchLots(state.lastCenter); });
+    $("bannerRetry").addEventListener("click", () => { if (state.lastCenter) searchLots(state.lastCenter); });
     $("addressForm").addEventListener("submit", (e) => { e.preventDefault(); searchAddress($("addressInput").value.trim()); });
 
     locate();
@@ -600,47 +429,14 @@
     if (state.destMarker) { state.destMarker.remove(); state.destMarker = null; }
   }
 
-  /* Address search (Nominatim, free). v9 keeps us inside its usage policy: at most one request
-     per second, answers remembered on the device for 30 days, results limited to the countries in
-     config.js → services.geocoderCountries (South Africa by default). */
-  const GEO_KEY = "parking_finder_geocode_v9";
-  const GEO_COUNTRIES = pick(SERVICES, "geocoderCountries", "za");
-  let lastGeocodeAt = 0;
-  function geoCacheGet(q) {
-    try { const c = JSON.parse(localStorage.getItem(GEO_KEY) || "{}")[q]; return c && Date.now() - c.t < 30 * 864e5 ? c : null; } catch (e) { return null; }
-  }
-  function geoCachePut(q, val) {
-    try {
-      const all = JSON.parse(localStorage.getItem(GEO_KEY) || "{}");
-      all[q] = { ...val, t: Date.now() };
-      const keys = Object.keys(all).sort((a, b) => all[b].t - all[a].t).slice(0, 50);
-      localStorage.setItem(GEO_KEY, JSON.stringify(Object.fromEntries(keys.map((k) => [k, all[k]]))));
-    } catch (e) { /* fine */ }
-  }
-  async function geocode(q) {
-    const key = q.toLowerCase().replace(/\s+/g, " ").trim();
-    const hit = geoCacheGet(key);
-    if (hit) return hit.none ? null : { lat: hit.lat, lng: hit.lng };
-    const wait = lastGeocodeAt + 1100 - Date.now();
-    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
-    lastGeocodeAt = Date.now();
-    const params = new URLSearchParams({ format: "jsonv2", limit: "1", q, "accept-language": "en" });
-    if (GEO_COUNTRIES) params.set("countrycodes", GEO_COUNTRIES);
-    const res = await timedFetch("Address search", GEOCODER + "?" + params.toString());
-    if (!res.ok) throw new Error("HTTP " + res.status);
-    const data = await res.json();
-    if (!data.length) { geoCachePut(key, { none: true }); return null; }
-    const found = { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
-    geoCachePut(key, found);
-    return found;
-  }
-
   async function searchAddress(q) {
     if (!q) return;
     setStatus("Looking up that address…");
     try {
-      const center = await geocode(q);
-      if (!center) { setStatus("Couldn't find that address. Try adding the town or a nearby landmark."); return; }
+      const res = await fetch("https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=" + encodeURIComponent(q));
+      const data = await res.json();
+      if (!data.length) { setStatus("Couldn't find that address. Try adding the city or a nearby landmark."); return; }
+      const center = { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
       clearDest();
       state.destMarker = L.marker(center, {
         icon: L.divIcon({ className: "pmarker", html: '<div class="dest"></div>', iconSize: [22, 22], iconAnchor: [11, 11] }),
@@ -656,148 +452,26 @@
   }
 
   /* ---------- scanning for parking ---------- */
-  /* Speed-up (v4). The free Overpass servers are often busy: one refuses straight away, others
-     just hang. The old code asked them one at a time and waited 18 s on each, so a search could
-     take ~40 s even when a healthy server was available. Now:
-       1. Smart order: the server that answered last time is asked first; servers that failed in
-          the last 10 minutes are moved to the back.
-       2. Hedging: if a server hasn't answered within HEDGE_MS, the next one is asked as well
-          (or immediately, if it fails outright). The first good answer wins; the rest are cancelled.
-       3. Shorter give-up time per server (OVERPASS_TIMEOUT, default 8 s). */
-  const HEDGE_MS = pick(SERVICES, "overpassHedgeMs", 2500);
-  const FETCH_LIMIT = pick(SEARCH, "fetchLimit", 300);
-  const SERVER_KEY = "parking_finder_server_health";
-  function loadHealth() { try { return JSON.parse(localStorage.getItem(SERVER_KEY)) || {}; } catch (e) { return {}; } }
-  function saveHealth(h) { try { localStorage.setItem(SERVER_KEY, JSON.stringify(h)); } catch (e) { /* fine */ } }
-  function serverOrder() {
-    const h = loadHealth(), now = Date.now();
-    const recentlyFailed = (u) => h.failed && h.failed[u] && now - h.failed[u] < 10 * 60 * 1000;
-    return OVERPASS.slice().sort((a, b) => {
-      const score = (u) => (u === h.best && !recentlyFailed(u) ? 0 : recentlyFailed(u) ? 2 : 1);
-      return score(a) - score(b) || OVERPASS.indexOf(a) - OVERPASS.indexOf(b);
-    });
-  }
-  function noteServer(url, ok) {
-    const h = loadHealth();
-    h.failed = h.failed || {};
-    if (ok) { h.best = url; delete h.failed[url]; } else { h.failed[url] = Date.now(); if (h.best === url) delete h.best; }
-    saveHealth(h);
-  }
-
-  /* ---------- search log (shown on status.html) ----------
-     Every request to an outside service is timed and the result noted, so when a search is slow
-     the Server status page can show exactly which server held it up and why. Kept in this
-     browser only (last 10 entries); nothing is sent anywhere. */
-  const LOG_KEY = "parking_finder_search_log";
-  function explainFailure(e, timeoutMs) {
-    const why = typeof e === "string" ? e : (e && e.message) || String(e);
-    if (why === "timed out") return `No answer within ${Math.round(timeoutMs / 1000)} s (server overloaded or hung)`;
-    const m = /(?:Overpass|HTTP) (\d{3})/.exec(why);
-    if (m) {
-      const code = +m[1];
-      if (code === 429) return "HTTP 429: too many requests (rate limited)";
-      if (code === 502 || code === 503) return `HTTP ${code}: server busy / at capacity`;
-      if (code === 504) return "HTTP 504: server timed out working on the query";
-      return `HTTP ${code}`;
-    }
-    if (/Failed to fetch|NetworkError|Load failed|network/i.test(why)) return "Couldn't connect (offline, blocked, or server down)";
-    return why;
-  }
-  function saveLog(entry) {
-    try {
-      const log = JSON.parse(localStorage.getItem(LOG_KEY) || "[]");
-      log.unshift(entry);
-      localStorage.setItem(LOG_KEY, JSON.stringify(log.slice(0, 10)));
-    } catch (e) { /* storage unavailable: fine */ }
-  }
-  // Single-request version for address search and directions.
-  async function timedFetch(kind, url, opts) {
-    const t0 = performance.now();
-    const host = new URL(url).hostname;
-    try {
-      const res = await fetch(url, opts);
-      const ms = Math.round(performance.now() - t0);
-      saveLog({ kind, when: Date.now(), totalMs: ms, ok: res.ok, attempts: [{ host, start: 0, ms, outcome: res.ok ? "Answered" : explainFailure("HTTP " + res.status) }] });
-      return res;
-    } catch (e) {
-      const ms = Math.round(performance.now() - t0);
-      saveLog({ kind, when: Date.now(), totalMs: ms, ok: false, attempts: [{ host, start: 0, ms, outcome: explainFailure(e) }] });
-      throw e;
-    }
-  }
-
-  // customQuery: optional, a full Overpass query to run instead of the parking search
-  // (used for the follow-up "name the lots" lookup). Same smart order + hedging either way.
-  function overpass(center, radius, onServerSwitch, customQuery, timeoutMs) {
-    const perServerTimeout = timeoutMs || OVERPASS_TIMEOUT;
-    const serverTimeout = Math.max(5, Math.ceil(perServerTimeout / 1000));
-    const q = customQuery || `[out:json][timeout:${serverTimeout}];nwr["amenity"="parking"](around:${radius},${center.lat},${center.lng});out center tags ${FETCH_LIMIT};`;
-    const order = serverOrder();
-    const failures = [];
-    const controllers = [];
-    let next = 0, pending = 0, settled = false, hedgeTimer = null;
-    const t0 = performance.now();
-    const attempts = [];
-    const since = () => Math.round(performance.now() - t0);
-
-    return new Promise((resolve, reject) => {
-      const finish = (fn, val) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(hedgeTimer);
-        controllers.forEach((c) => { try { c.abort("cancelled"); } catch (e) { /* ignore */ } });
-        const ok = fn === resolve;
-        attempts.forEach((a) => { if (a.ms === null) { a.ms = since() - a.start; a.outcome = "Cancelled (another server answered first)"; } });
-        saveLog({ kind: customQuery ? "Naming lots" : "Parking search", when: Date.now(), totalMs: since(), ok,
-          count: ok && Array.isArray(val) ? val.length : undefined, attempts });
-        fn(val);
-      };
-      const startNext = () => {
-        clearTimeout(hedgeTimer);
-        if (settled || next >= order.length) {
-          if (!settled && pending === 0) {
-            const err = new Error("All map servers failed");
-            err.details = failures;
-            finish(reject, err);
-          }
-          return;
-        }
-        const i = next++;
-        const url = order[i];
-        if (i > 0 && onServerSwitch) onServerSwitch(i + 1, order.length);
-        const controller = new AbortController();
-        controllers.push(controller);
-        const timer = setTimeout(() => controller.abort("timed out"), perServerTimeout);
-        const attempt = { host: new URL(url).hostname, start: since(), ms: null, outcome: "" };
-        attempts.push(attempt);
-        pending++;
-        fetch(url, {
+  async function overpass(center, radius, onServerSwitch) {
+    const q = `[out:json][timeout:12];nwr["amenity"="parking"](around:${radius},${center.lat},${center.lng});out center tags 100;`;
+    let lastErr;
+    for (let i = 0; i < OVERPASS.length; i++) {
+      const url = OVERPASS[i];
+      if (i > 0 && onServerSwitch) onServerSwitch();
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 9000);
+      try {
+        const res = await fetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/x-www-form-urlencoded" },
           body: "data=" + encodeURIComponent(q),
           signal: controller.signal
-        })
-          .then((res) => { if (!res.ok) throw new Error("Overpass " + res.status); return res.json(); })
-          .then((data) => {
-            if (settled) return;
-            attempt.ms = since() - attempt.start; attempt.outcome = "Answered";
-            noteServer(url, true); finish(resolve, data.elements || []);
-          })
-          .catch((e) => {
-            if (settled) return;
-            const why = typeof e === "string" ? e : (e && e.message) || String(e);
-            attempt.ms = since() - attempt.start; attempt.outcome = explainFailure(e, perServerTimeout);
-            failures.push(`${new URL(url).hostname}: ${why}`);
-            noteServer(url, false);
-            pending--;
-            startNext(); // this one failed: try the next server straight away
-          })
-          .finally(() => clearTimeout(timer));
-        // Still waiting after HEDGE_MS? Ask the next server too.
-        hedgeTimer = setTimeout(startNext, HEDGE_MS);
-      };
-      startNext();
-    });
+        });
+        if (!res.ok) throw new Error("Overpass " + res.status);
+        return (await res.json()).elements || [];
+      } catch (e) { lastErr = e; } finally { clearTimeout(timer); }
+    }
+    throw lastErr;
   }
 
   function hoursStatus(raw) {
@@ -823,20 +497,14 @@
 
     const isOnStreet = ON_STREET_TYPES.has(t.parking);
     const isGarage = ["multi-storey", "underground", "rooftop"].includes(t.parking);
-    // Real name from the map if there is one; otherwise a generic label that nameLots() tries to
-    // replace with "Somerset Mall parking" / "Parking near Spar" / "Parking on Main Road".
-    const ownName = t.name || t["name:en"] || t.operator || t.brand || t["addr:housename"] || "";
-    const street = t["addr:street"] || "";
-    const name = ownName || (street ? `Parking on ${street}` : "") ||
-      TYPE_LABEL[t.parking] || (isGarage ? "Parking garage" : "Parking lot");
+    const name = t.name || t.operator || TYPE_LABEL[t.parking] || (isGarage ? "Parking garage" : "Parking lot");
 
     const meta = [];
     const orientation = ORIENTATION_LABEL[t.orientation] || "";
     if (orientation) meta.push(orientation);
     if (t.capacity && /^\d+$/.test(t.capacity)) meta.push(`${t.capacity} spaces`);
 
-    const rawAccess = String(t.access || "").split(";")[0].trim().toLowerCase();
-    const access = ACCESS_FROM_TAG[rawAccess] || "unknown";
+    const access = ["private", "permit", "customers"].includes(t.access) ? t.access : "public";
     const fee = t.fee === "yes" ? "paid" : t.fee === "no" ? "free" : "unknown";
     const feeLabel = fee === "paid" ? (t.charge ? `Paid (${t.charge})` : "Paid") : fee === "free" ? "Free" : "Price not listed";
     const h = hoursStatus(t.opening_hours);
@@ -848,201 +516,43 @@
       kindLabel: TYPE_LABEL[t.parking] || (isOnStreet ? "On-street parking" : "Parking lot"),
       fee, feeLabel, access, accessLabel: ACCESS_LABEL[access],
       status: h.status, statusLabel: h.label, hours: t.opening_hours || "",
-      distance: haversine(center, pos),
-      named: !!ownName, nameNote: ""
+      distance: haversine(center, pos)
     };
   }
 
-  /* ---------- naming unnamed lots ----------
-     Most parking lots on OpenStreetMap have no name. After the results are on screen we do ONE
-     extra lookup that finds named places right next to the unnamed lots (malls, schools, shops,
-     churches, hospitals...) and the streets they're on, then rename them, e.g.
-       "Somerset Mall parking"   (lot belongs to a big place: mall, school, hospital, church...)
-       "Parking near Spar"       (closest named shop/restaurant/business)
-       "Parking on Main Road"    (nothing named nearby, but we know the street)
-     If the lookup fails, the generic names simply stay. */
-  const NAMING = CFG.naming || {};
-  const NAME_PLACE_RADIUS = pick(NAMING, "placeRadius", 80);   // metres from the lot's edge
-  const NAME_STREET_RADIUS = pick(NAMING, "streetRadius", 50);
-  const NAME_TIMEOUT = pick(NAMING, "timeoutMs", 20000);
-  function isBigPlace(t) {
-    return t.shop === "mall" || !!t.landuse ||
-      /^(school|college|university|hospital|marketplace|townhall)$/.test(t.amenity || "") ||
-      /^(stadium|golf_course|park|sports_centre|nature_reserve)$/.test(t.leisure || "");
-  }
-  // "Parking lot · Main Road · 40 spaces"
-  function typeLineFor(lot) { return [lot.kindLabel, lot.street, lot.meta].filter(Boolean).join(" · "); }
-  // Places big enough that a lot next to them is "their" parking: "<Name> parking".
-  const OWNER_TYPES = {
-    shop: ["mall", "supermarket", "department_store", "hardware", "doityourself", "garden_centre", "wholesale"],
-    amenity: ["school", "college", "university", "kindergarten", "hospital", "clinic", "place_of_worship", "townhall",
-      "community_centre", "library", "police", "fire_station", "theatre", "cinema", "marketplace", "bus_station", "courthouse", "post_office"],
-    leisure: ["sports_centre", "stadium", "park", "golf_course", "nature_reserve", "beach_resort", "pitch", "fitness_centre", "water_park"],
-    tourism: ["hotel", "museum", "attraction", "zoo", "theme_park", "wine_cellar"],
-    landuse: ["retail", "commercial"],
-    building: ["retail", "commercial", "school", "hospital", "church", "civic", "office"]
-  };
-  function placeRank(tags) {
-    // lower = better name source
-    for (const k of Object.keys(OWNER_TYPES)) if (tags[k] && OWNER_TYPES[k].includes(tags[k])) return { rank: k === "building" || k === "landuse" ? 1 : 0, owner: true };
-    if (tags.shop || tags.amenity || tags.tourism || tags.leisure || tags.healthcare) return { rank: 2, owner: false };
-    return { rank: 3, owner: false }; // offices, named buildings, crafts
-  }
-  function segDist(p, a, b) {
-    // metres from point p to segment a-b (flat-earth approximation, fine at these distances)
-    const k = Math.cos(p.lat * Math.PI / 180) * 111320, m = 110540;
-    const ax = (a.lon - p.lng) * k, ay = (a.lat - p.lat) * m, bx = (b.lon - p.lng) * k, by = (b.lat - p.lat) * m;
-    const dx = bx - ax, dy = by - ay, len = dx * dx + dy * dy;
-    const t = len ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / len)) : 0;
-    return Math.hypot(ax + t * dx, ay + t * dy);
-  }
-
-  async function nameLots(token) {
-    // Every shown lot gets its street (helps tell apart lots near the same place);
-    // only lots without an official name get renamed.
-    const todo = state.lots.filter((l) => !l.nameNote && l.street === undefined);
-    if (!todo.length) return;
-    const ids = { node: [], way: [], relation: [] };
-    todo.forEach((l) => { const [type, id] = l.id.split("/"); if (ids[type]) ids[type].push(id); });
-    const set = ["node", "way", "relation"].filter((t) => ids[t].length).map((t) => `${t}(id:${ids[t].join(",")});`).join("");
-    const serverTimeout = Math.max(5, Math.ceil(NAME_TIMEOUT / 1000));
-    const q = `[out:json][timeout:${serverTimeout}];(${set})->.p;` +
-      `(nwr(around.p:${NAME_PLACE_RADIUS})["name"][~"^(shop|amenity|leisure|tourism|healthcare|office|craft)$"~"."];` +
-      `nwr(around.p:${NAME_PLACE_RADIUS})["name"]["building"~"^(retail|commercial|school|hospital|church|civic|office)$"];` +
-      `nwr(around.p:${NAME_PLACE_RADIUS})["name"]["landuse"~"^(retail|commercial)$"];)->.n;` +
-      `.n out center tags 600;` +
-      `way(around.p:${NAME_STREET_RADIUS})["highway"]["name"]["highway"!~"^(footway|path|cycleway|steps|bridleway|track|corridor|proposed|construction)$"];out tags geom 300;`;
-    let elements;
-    // Runs in the background after results are on screen, so it gets a longer allowance.
-    try { elements = await overpass(null, 0, null, q, NAME_TIMEOUT); } catch (e) { console.warn("Naming lookup failed", e); return; }
-    if (token !== state.token) return;
-
-    const places = [], streets = [];
-    elements.forEach((e) => {
-      const t = e.tags || {};
-      if (!t.name) return;
-      if (e.geometry && t.highway) { streets.push({ name: t.name, geom: e.geometry }); return; }
-      if (/^parking/.test(t.amenity || "")) return;
-      const lat = e.lat !== undefined ? e.lat : e.center && e.center.lat;
-      const lon = e.lon !== undefined ? e.lon : e.center && e.center.lon;
-      if (lat === undefined) return;
-      places.push({ name: t.name, pos: { lat, lng: lon }, ...placeRank(t), big: isBigPlace(t) });
-    });
-
-    todo.forEach((lot) => {
-      // Nearest named street (measured to the road line itself, not its middle).
-      let road = null;
-      streets.forEach((s) => {
-        for (let i = 1; i < s.geom.length; i++) {
-          const d = segDist(lot.pos, s.geom[i - 1], s.geom[i]);
-          if (!road || d < road.d) road = { name: s.name, d };
-        }
-      });
-      lot.street = road && road.d <= NAME_STREET_RADIUS + 40 ? road.name : "";
-      if (lot.named) return;
-
-      // Best place: closest, with a preference for places that "own" parking (malls, schools,
-      // churches...). Big places are measured from their middle, so they get a larger allowance.
-      let best = null;
-      places.forEach((pl) => {
-        const d = haversine(lot.pos, pl.pos);
-        if (d > (pl.big ? NAME_PLACE_RADIUS + 250 : NAME_PLACE_RADIUS + 40)) return;
-        const score = d + pl.rank * 60 - (pl.owner ? 40 : 0) - (pl.big ? 60 : 0);
-        if (!best || score < best.score) best = { ...pl, d, score };
-      });
-      if (best) {
-        // "<Place> parking" only when it's clearly theirs: right next to it, or part of a big site.
-        const theirs = best.owner && (best.d <= 50 || (best.big && best.d <= 150));
-        lot.name = theirs ? `${best.name} parking` : `Parking near ${best.name}`;
-        lot.nameNote = `No official name on the map. Named after ${best.name}, about ${fmtDist(Math.max(10, best.d))} away.`;
-      } else if (lot.street) {
-        lot.name = lot.kind === "onstreet" ? `${lot.street} (on-street)` : `Parking on ${lot.street}`;
-        lot.nameNote = "No official name on the map. Named after the street it's on.";
-      } else {
-        lot.nameNote = "No official name on the map, and nothing named close by.";
-      }
-    });
-
-    saveCache(state.lastCenter, state.radius, state.lots, true);
-    if (!$("list").hidden) renderList();
-    state.lots.forEach((lot) => {
-      const m = state.markers.get(lot.id);
-      const elm = m && m.getElement && m.getElement();
-      if (elm) elm.title = `${lot.name}: ${lot.statusLabel}`;
-    });
-    if (state.selected) {
-      $("routeName").textContent = state.selected.name;
-      $("routeMeta").textContent = typeLineFor(state.selected);
-      $("routeMeta").hidden = !$("routeMeta").textContent;
-      renderNameNote(state.selected);
-    }
-  }
-
-  function renderNameNote(lot) {
-    const n = $("routeNameNote");
-    if (!n) return;
-    n.textContent = lot.nameNote && !lot.named ? lot.nameNote : "";
-    n.hidden = !n.textContent;
-  }
-
-  async function searchLots(center, force) {
+  async function searchLots(center) {
     const token = ++state.token;
     state.lastCenter = center;
     clearRoute();
     showList();
     hideBanner();
-    setSearchBusy(true);
-    const searchStart = performance.now();
 
-    const cache = loadCache(center, state.radius);
+    const cache = loadCache();
     const usedCache = !!cache;
     if (cache) {
-      // Re-check opening hours: a lot saved as "Open now" last night may be closed this morning.
-      state.lots = cache.lots.map((l) => {
-        const h = l.hours ? hoursStatus(l.hours) : { status: l.status, label: l.statusLabel };
-        return { ...l, status: h.status, statusLabel: h.label, distance: haversine(center, l.pos) };
-      });
+      state.lots = cache.lots.map((l) => ({ ...l, distance: haversine(center, l.pos) }));
       state.lots.sort((a, b) => RANK[a.status] - RANK[b.status] || a.distance - b.distance);
       renderMarkers();
       renderList();
       updateStatus();
       state.lastUpdated = cache.timestamp;
       renderUpdated();
-      if (force || Date.now() - cache.timestamp >= FRESH_MS) {
-        showBanner(`Showing saved results from ${timeAgo(cache.timestamp)} while checking for updates…`, "info", false);
-      }
+      showBanner(`Showing saved results from ${timeAgo(cache.timestamp)} while checking for updates…`, "info", false);
     } else {
       setStatus("Scanning for parking lots…");
     }
 
     try {
-      if (cache && !force && Date.now() - cache.timestamp < FRESH_MS) {
-        // Fresh enough: no need to ask the map servers at all.
-        state.lastDuration = 0;
-        fitToLots(center);
-        await nameLots(token); // only does anything for lots that were never named
-        return;
-      }
       const [elements] = await Promise.all([
-        overpass(center, state.radius, (attempt, total) => setStatus(`Map server is slow, trying backup ${attempt - 1} of ${total - 1}…`)),
+        overpass(center, state.radius, () => setStatus("First map server is slow, trying a backup…")),
         hoursLib
       ]);
       if (token !== state.token) return;
 
       const lots = elements.map((e) => parseLot(e, center)).filter(Boolean);
-      // Reuse names we already worked out for this area (saved with the last results), so the
-      // naming lookup only runs for lots we haven't named before.
-      const known = new Map(((cache && cache.lots) || []).filter((l) => l.street !== undefined).map((l) => [l.id, l]));
-      lots.forEach((l) => {
-        const k = known.get(l.id);
-        if (!k) return;
-        l.street = k.street;
-        if (!l.named && k.nameNote) { l.name = k.name; l.nameNote = k.nameNote; }
-      });
       lots.sort((a, b) => RANK[a.status] - RANK[b.status] || a.distance - b.distance);
-      state.lots = lots.slice(0, MAX_RESULTS);
+      state.lots = lots.slice(0, 40);
       state.lastUpdated = Date.now();
-      state.lastDuration = performance.now() - searchStart;
       saveCache(center, state.radius, state.lots);
       renderMarkers();
       renderList();
@@ -1050,22 +560,17 @@
       renderUpdated();
       hideBanner();
       fitToLots(center);
-      await nameLots(token); // fills in names for unnamed lots (list is already showing)
     } catch (err) {
       console.error(err);
       if (token !== state.token) return;
       if (usedCache) {
         showBanner(`Couldn't refresh — still showing saved results from ${timeAgo(state.lastUpdated)}.`, "error", true);
       } else {
-        state.lastError = err.details || [String(err.message || err)];
         state.lots = [];
         renderMarkers();
         renderList(true);
         setStatus("");
       }
-    } finally {
-      // Only the newest search controls the indicator (an older one finishing late shouldn't stop it).
-      if (token === state.token) setSearchBusy(false);
     }
   }
 
@@ -1073,7 +578,7 @@
     return state.lots.filter((l) =>
       !(state.hideClosed && l.status === "closed") &&
       !(state.freeOnly && l.fee !== "free") &&
-      !(state.publicOnly && RESTRICTED.has(l.access))
+      !(state.publicOnly && l.access !== "public")
     );
   }
 
@@ -1123,14 +628,10 @@
       if (showRetry) {
         const box = el("li", "empty retry-empty");
         box.append(el("p", null, "Couldn't load parking data right now. The free map server may be busy."));
-        if (state.lastError && state.lastError.length) box.append(el("p", "tech", "Details: " + state.lastError.join(" | ")));
         const btn = el("button", "btn-paint", "Try again");
         btn.type = "button";
-        btn.addEventListener("click", () => { if (state.lastCenter) searchLots(state.lastCenter, true); });
+        btn.addEventListener("click", () => { if (state.lastCenter) searchLots(state.lastCenter); });
         box.append(btn);
-        const status = el("a", "link status-link", "Check server status");
-        status.href = "status.html";
-        box.append(status);
         list.append(box);
       } else if (state.lastCenter) {
         list.append(el("li", "empty", "No parking lots found here. Try a larger search radius, or pan the map and choose Search this area."));
@@ -1146,7 +647,7 @@
       sign.setAttribute("aria-hidden", "true");
       const info = el("span", "info");
       info.append(el("span", "name", lot.name));
-      const typeLine = typeLineFor(lot);
+      const typeLine = [lot.kindLabel, lot.meta].filter(Boolean).join(" · ");
       if (typeLine) info.append(el("span", "meta", typeLine));
       const badges = el("span", "badges");
       badges.append(el("span", `state ${lot.status}`, lot.statusLabel), el("span", `fee ${lot.fee}`, lot.feeLabel), el("span", `access ${lot.access}`, lot.accessLabel));
@@ -1158,13 +659,11 @@
     });
   }
 
-  /* ---------- directions: hand-off to the user's navigation app (free, no API key) ---------- */
+  /* ---------- directions (OSRM public server) ---------- */
   function mapsUrl(lot) {
     const p = new URLSearchParams({ api: "1", destination: `${lot.pos.lat},${lot.pos.lng}`, travelmode: "driving" });
     return "https://www.google.com/maps/dir/?" + p.toString();
   }
-  function wazeUrl(lot) { return `https://waze.com/ul?ll=${lot.pos.lat},${lot.pos.lng}&navigate=yes`; }
-  function appleUrl(lot) { return `https://maps.apple.com/?daddr=${lot.pos.lat},${lot.pos.lng}&dirflg=d`; }
 
   function osmEditUrl(lot) {
     // lot.id looks like "node/123456" or "way/123456" — iD editor identifies
@@ -1175,8 +674,8 @@
   }
 
   async function fetchRoute(from, to) {
-    const url = `${ROUTER}/${from.lng},${from.lat};${to.lng},${to.lat}?overview=full&geometries=geojson&steps=true`;
-    const res = await timedFetch("Directions", url);
+    const url = `https://router.project-osrm.org/route/v1/driving/${from.lng},${from.lat};${to.lng},${to.lat}?overview=full&geometries=geojson&steps=true`;
+    const res = await fetch(url);
     const data = await res.json();
     if (data.code !== "Ok" || !data.routes || !data.routes.length) throw new Error(data.message || "No driving route found");
     return data.routes[0];
@@ -1241,36 +740,19 @@
     $("list").hidden = true;
     $("route").hidden = false;
     $("routeName").textContent = lot.name;
-    renderNameNote(lot);
-    const typeLine = typeLineFor(lot);
+    const typeLine = [lot.kindLabel, lot.meta].filter(Boolean).join(" · ");
     $("routeMeta").textContent = typeLine;
     $("routeMeta").hidden = !typeLine;
     const st = $("routeState");
     st.replaceChildren(el("span", `state ${lot.status}`, lot.statusLabel), el("span", `fee ${lot.fee}`, lot.feeLabel), el("span", `access ${lot.access}`, lot.accessLabel));
     const summary = $("routeSummary");
     summary.className = "summary";
+    summary.textContent = state.user ? "Getting directions…" : "Turn on location to see directions here.";
     $("steps").replaceChildren();
     $("gmapsLink").href = mapsUrl(lot);
-    $("wazeLink").href = wazeUrl(lot);
-    $("appleLink").href = appleUrl(lot);
     $("osmEditLink").href = osmEditUrl(lot);
     $("backBtn").focus();
     state.map.panTo(lot.pos);
-
-    if (!ROUTER) {
-      // No routing server: show how far it is and draw a dashed "as the crow flies" line.
-      if (state.user) {
-        summary.textContent = `About ${fmtDist(haversine(state.user, lot.pos))} from you (straight line)`;
-        state.routeLine = L.polyline([[state.user.lat, state.user.lng], [lot.pos.lat, lot.pos.lng]],
-          { color: SIGN_COLOUR, weight: 4, opacity: 0.8, dashArray: "8 10" }).addTo(state.map);
-        state.map.fitBounds(state.routeLine.getBounds(), { padding: [70, 70], maxZoom: 17 });
-      } else {
-        summary.textContent = `${fmtDist(lot.distance)} from ${state.anchor}`;
-      }
-      return;
-    }
-
-    summary.textContent = state.user ? "Getting directions…" : "Turn on location to see directions here.";
     if (!state.user) return;
 
     try {
@@ -1280,7 +762,7 @@
       summary.textContent = `${fmtTime(route.duration)} drive, ${fmtDist(route.distance)}`;
 
       const coords = route.geometry.coordinates.map(([lng, lat]) => [lat, lng]);
-      state.routeLine = L.polyline(coords, { color: SIGN_COLOUR, weight: 6, opacity: 0.9 }).addTo(state.map);
+      state.routeLine = L.polyline(coords, { color: "#1B5FC1", weight: 6, opacity: 0.9 }).addTo(state.map);
       state.map.fitBounds(state.routeLine.getBounds(), { padding: [70, 70] });
 
       const steps = $("steps");
@@ -1295,12 +777,10 @@
       console.error(err);
       if (state.selected !== lot) return;
       summary.className = "summary error";
-      summary.textContent = "Couldn't load directions here. Use one of the buttons below to navigate.";
+      summary.textContent = "Couldn't load directions here. Use the button below to navigate in Google Maps.";
     }
   }
 
-  $("year").textContent = new Date().getFullYear();
-  applyConfig();
   track("visits");
   initMap();
 })();
